@@ -18,3 +18,4 @@ from mcp_server.tools import oom  # noqa: F401
 from mcp_server.tools import network  # noqa: F401
 from mcp_server.tools import surfaceflinger  # noqa: F401
 from mcp_server.tools import regression  # noqa: F401
+from mcp_server.tools import diagnose  # noqa: F401
