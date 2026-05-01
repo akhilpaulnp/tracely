@@ -80,21 +80,34 @@ def _generate_trace_path(package: str = "") -> str:
     return os.path.join(TRACES_DIR, f"trace_{ts}{suffix}.perfetto-trace")
 
 
+def _get_api_level(serial: str = "") -> int:
+    """Get the Android API level of the connected device."""
+    cmd = ["adb"]
+    if serial:
+        cmd += ["-s", serial]
+    try:
+        r = subprocess.run(
+            cmd + ["shell", "getprop", "ro.build.version.sdk"],
+            capture_output=True, text=True, timeout=5,
+        )
+        return int(r.stdout.strip())
+    except Exception:
+        return 0
+
+
 def _build_config(
     duration_s: int = 10,
     categories: list = None,
     buffer_size_kb: int = 65536,
     package: str = "",
+    api_level: int = 0,
 ) -> str:
     """Build a Perfetto text-format trace config.
 
-    Includes all data sources needed for the MCP server's 29 tools:
-    - linux.ftrace with comprehensive ftrace events and atrace categories
-    - linux.process_stats for process/memory metadata
-    - android.surfaceflinger.frametimeline for jank/frame analysis (Android 12+)
-    - android.network_packets for network analysis (Android 14+)
-    - android.packages_list for mapping UIDs to package names
-    - android.log for logcat
+    Adapts data sources to device API level:
+    - All devices: ftrace, process_stats, packages_list, logcat, sys_stats
+    - Android 12+ (API 31): surfaceflinger.frametimeline
+    - Android 14+ (API 34): network_packets
     """
     if categories is None:
         categories = DEFAULT_CATEGORIES
@@ -111,7 +124,8 @@ def _build_config(
     if package:
         pkg_line = f'\n      atrace_apps: "{package}"'
 
-    return f"""buffers {{
+    # Core data sources (all Android versions)
+    config = f"""buffers {{
   size_kb: {buffer_size_kb}
   fill_policy: RING_BUFFER
 }}
@@ -136,19 +150,6 @@ data_sources {{
     process_stats_config {{
       scan_all_processes_on_start: true
       proc_stats_poll_ms: 1000
-    }}
-  }}
-}}
-data_sources {{
-  config {{
-    name: "android.surfaceflinger.frametimeline"
-  }}
-}}
-data_sources {{
-  config {{
-    name: "android.network_packets"
-    network_packet_trace_config {{
-      poll_ms: 250
     }}
   }}
 }}
@@ -183,8 +184,31 @@ data_sources {{
     }}
   }}
 }}
-duration_ms: {duration_s * 1000}
 """
+
+    # Android 12+ (API 31): Frame timeline for jank analysis
+    if api_level >= 31:
+        config += """data_sources {
+  config {
+    name: "android.surfaceflinger.frametimeline"
+  }
+}
+"""
+
+    # Android 14+ (API 34): Network packet tracing
+    if api_level >= 34:
+        config += """data_sources {
+  config {
+    name: "android.network_packets"
+    network_packet_trace_config {
+      poll_ms: 250
+    }
+  }
+}
+"""
+
+    config += f"duration_ms: {duration_s * 1000}\n"
+    return config
 
 
 def _build_memory_config(
@@ -193,13 +217,14 @@ def _build_memory_config(
     heap_sampling_bytes: int = 4096,
     java_heap: bool = True,
     native_heap: bool = True,
+    api_level: int = 0,
 ) -> str:
     """Build a Perfetto config for memory profiling.
 
     Includes heapprofd (native) and java_hprof (Java) data sources
     on top of the standard config.
     """
-    base = _build_config(duration_s=duration_s, package=package)
+    base = _build_config(duration_s=duration_s, package=package, api_level=api_level)
 
     extra = ""
     if native_heap and package:
@@ -248,7 +273,8 @@ def capture_trace(
     if serial:
         cmd_prefix += ["-s", serial]
 
-    config = _build_config(duration_s, categories, buffer_size_kb, package)
+    api_level = _get_api_level(serial)
+    config = _build_config(duration_s, categories, buffer_size_kb, package, api_level)
 
     # Use Popen (non-blocking) so we can launch the app while tracing
     # --txt flag needed for text-format configs on most Android devices
@@ -314,8 +340,9 @@ def capture_memory_trace(
     if serial:
         cmd_prefix += ["-s", serial]
 
+    api_level = _get_api_level(serial)
     config = _build_memory_config(
-        duration_s, package, heap_sampling_bytes, java_heap, native_heap
+        duration_s, package, heap_sampling_bytes, java_heap, native_heap, api_level
     )
 
     proc = subprocess.Popen(

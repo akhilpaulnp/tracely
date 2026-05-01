@@ -7,7 +7,7 @@ from mcp_server.core.query_engine import QueryEngine
 def _make_mock_result(columns, rows_data):
     """Helper to create a mock QueryResultIterator."""
     mock_result = MagicMock()
-    mock_result.column_names.return_value = columns
+    type(mock_result).column_names = PropertyMock(return_value=columns)
 
     mock_rows = []
     for row_dict in rows_data:

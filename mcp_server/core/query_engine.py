@@ -37,7 +37,7 @@ class QueryEngine:
         """
         try:
             result = tp.query(sql)
-            columns = result.column_names()
+            columns = result.column_names
             rows = []
             truncated = False
 
