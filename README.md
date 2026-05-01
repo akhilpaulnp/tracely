@@ -1,6 +1,6 @@
 # Perfetto MCP Server
 
-MCP server that gives Claude deep access to Android performance trace analysis via Perfetto. 30 tools covering trace capture, jank analysis, startup profiling, memory/heap inspection, GC analysis, lock contention, input latency, and more.
+MCP server that gives Claude deep access to Android performance trace analysis via Perfetto. 33 tools covering trace capture, jank analysis, startup profiling, memory/heap inspection, GC analysis, lock contention, input latency, and more. Adaptive capture config probes device capabilities before recording.
 
 ## Requirements
 
@@ -41,7 +41,7 @@ After setup, the MCP server connects automatically via Claude Code. Just talk to
 - "What's causing GC pressure in my app?"
 - "Compare startup between baseline and current traces"
 
-## Tools (30)
+## Tools (33)
 
 ### Trace Management
 | Tool | What it does |
@@ -88,9 +88,16 @@ After setup, the MCP server connects automatically via Claude Code. Just talk to
 | Tool | What it does |
 |------|-------------|
 | analyze-network | Per-app network packets and bytes (Android 14+) |
-| capture-trace | Capture from connected device (all data sources auto-configured) |
+| device-capabilities | Probe device: API level, available categories, supported features |
+| capture-trace | Capture from connected device (auto-adapts config to device) |
 | capture-memory-trace | Capture with heap profiling (heapprofd + java_hprof) |
 | list-android-devices | List connected devices with model and API level |
+
+### Composite Analysis (one call, full report)
+| Tool | What it does |
+|------|-------------|
+| full-startup-analysis | Complete startup report: timing, TTID, breakdown, GC, blocking, contention, dex loading |
+| full-memory-analysis | Complete memory report: counters, GC, class histogram, dominator tree, leak suspects |
 
 ### Multi-trace
 | Tool | What it does |
