@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "perfetto": {
+      "command": "/Users/entri/PerfettoAI/.venv/bin/python3",
+      "args": ["-m", "mcp_server.server"],
+      "cwd": "/Users/entri/PerfettoAI",
+      "env": {
+        "PYTHONPATH": "/Users/entri/PerfettoAI"
+      }
+    }
+  }
+}
