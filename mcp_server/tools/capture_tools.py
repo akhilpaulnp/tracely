@@ -139,6 +139,51 @@ async def capture_memory_trace(
 
 
 @mcp.tool()
+def device_capabilities() -> str:
+    """Probe the connected device for trace capture capabilities.
+
+    Reports Android version, available atrace categories, supported
+    data sources, RAM, and device model. Run this before capturing
+    to understand what data the trace will contain.
+    """
+    err = device.check_adb()
+    if err:
+        return json.dumps({"error": err})
+
+    devices = device.list_devices()
+    if not devices:
+        return json.dumps({"error": "No device connected."})
+
+    caps = capture.get_device_capabilities()
+    caps["available_categories_count"] = len(caps.get("available_categories", []))
+
+    # Summarize what tools will have data
+    tools_with_data = ["analyze-scheduling", "analyze-memory", "analyze-binder",
+                       "detect-anr", "analyze-blocking-calls", "analyze-oom-priority",
+                       "analyze-gc", "analyze-lock-contention", "startup-breakdown",
+                       "analyze-startup"]
+    tools_conditional = []
+    if caps["has_frametimeline"]:
+        tools_with_data.append("analyze-jank (frame timeline)")
+    else:
+        tools_conditional.append("analyze-jank: needs Android 12+ (device is API " + str(caps["api_level"]) + ")")
+    if caps["has_network_packets"]:
+        tools_with_data.append("analyze-network")
+    else:
+        tools_conditional.append("analyze-network: needs Android 14+")
+    if caps["has_heapprofd"]:
+        tools_with_data.append("analyze-heap-native (via capture-memory-trace)")
+    if caps["has_java_hprof"]:
+        tools_with_data.append("analyze-heap-java (via capture-memory-trace)")
+        tools_with_data.append("analyze-heap-dominators (via capture-memory-trace)")
+
+    caps["tools_with_data"] = tools_with_data
+    caps["tools_unavailable"] = tools_conditional
+
+    return json.dumps(caps)
+
+
+@mcp.tool()
 def list_android_devices() -> str:
     """List connected Android devices with model and API level info."""
     err = device.check_adb()

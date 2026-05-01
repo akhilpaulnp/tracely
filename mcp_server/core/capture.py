@@ -80,19 +80,99 @@ def _generate_trace_path(package: str = "") -> str:
     return os.path.join(TRACES_DIR, f"trace_{ts}{suffix}.perfetto-trace")
 
 
-def _get_api_level(serial: str = "") -> int:
-    """Get the Android API level of the connected device."""
+def _adb_cmd(args: list, serial: str = "", timeout: int = 5) -> str:
+    """Run an adb command and return stdout, or empty string on failure."""
     cmd = ["adb"]
     if serial:
         cmd += ["-s", serial]
     try:
-        r = subprocess.run(
-            cmd + ["shell", "getprop", "ro.build.version.sdk"],
-            capture_output=True, text=True, timeout=5,
-        )
-        return int(r.stdout.strip())
+        r = subprocess.run(cmd + args, capture_output=True, text=True, timeout=timeout)
+        return r.stdout.strip()
     except Exception:
-        return 0
+        return ""
+
+
+def get_device_capabilities(serial: str = "") -> dict:
+    """Probe the connected device for capabilities that affect trace config.
+
+    Returns a dict with:
+        api_level: int (Android SDK version)
+        perfetto_version: str (e.g. "v15.0")
+        available_categories: list of atrace categories the device supports
+        has_frametimeline: bool (Android 12+, API 31)
+        has_network_packets: bool (Android 14+, API 34)
+        has_heapprofd: bool (Android 10+, API 29)
+        has_java_hprof: bool (Android 11+, API 30)
+        has_surfaceflinger_ft: bool (Android 12+, API 31)
+        model: str
+        manufacturer: str
+        ram_mb: int (approximate total RAM)
+    """
+    caps = {
+        "api_level": 0,
+        "perfetto_version": "",
+        "available_categories": [],
+        "has_frametimeline": False,
+        "has_network_packets": False,
+        "has_heapprofd": False,
+        "has_java_hprof": False,
+        "has_surfaceflinger_ft": False,
+        "model": "",
+        "manufacturer": "",
+        "ram_mb": 0,
+    }
+
+    # API level
+    sdk = _adb_cmd(["shell", "getprop", "ro.build.version.sdk"], serial)
+    try:
+        caps["api_level"] = int(sdk)
+    except ValueError:
+        pass
+
+    api = caps["api_level"]
+
+    # Perfetto version
+    pv = _adb_cmd(["shell", "perfetto", "--version"], serial)
+    caps["perfetto_version"] = pv.split("\n")[0] if pv else ""
+
+    # Available atrace categories
+    atrace_out = _adb_cmd(["shell", "atrace", "--list_categories"], serial, timeout=10)
+    if atrace_out:
+        cats = []
+        for line in atrace_out.split("\n"):
+            line = line.strip()
+            if line and not line.startswith("---"):
+                # Format: "category_name - description"
+                parts = line.split(" - ", 1)
+                if parts:
+                    cat = parts[0].strip()
+                    if cat:
+                        cats.append(cat)
+        caps["available_categories"] = cats
+
+    # Capability flags based on API level
+    caps["has_frametimeline"] = api >= 31       # Android 12
+    caps["has_network_packets"] = api >= 34     # Android 14
+    caps["has_heapprofd"] = api >= 29           # Android 10
+    caps["has_java_hprof"] = api >= 30          # Android 11
+    caps["has_surfaceflinger_ft"] = api >= 31   # Android 12
+
+    # Device info
+    caps["model"] = _adb_cmd(["shell", "getprop", "ro.product.model"], serial)
+    caps["manufacturer"] = _adb_cmd(["shell", "getprop", "ro.product.manufacturer"], serial)
+
+    # RAM (MemTotal from /proc/meminfo)
+    meminfo = _adb_cmd(["shell", "cat", "/proc/meminfo"], serial)
+    for line in meminfo.split("\n"):
+        if line.startswith("MemTotal:"):
+            try:
+                kb = int(line.split()[1])
+                caps["ram_mb"] = kb // 1024
+            except (ValueError, IndexError):
+                pass
+            break
+
+    return caps
 
 
 def _build_config(
@@ -101,16 +181,22 @@ def _build_config(
     buffer_size_kb: int = 65536,
     package: str = "",
     api_level: int = 0,
+    available_categories: list = None,
 ) -> str:
     """Build a Perfetto text-format trace config.
 
-    Adapts data sources to device API level:
+    Adapts data sources to device capabilities:
+    - Filters atrace categories to only those available on the device
     - All devices: ftrace, process_stats, packages_list, logcat, sys_stats
     - Android 12+ (API 31): surfaceflinger.frametimeline
     - Android 14+ (API 34): network_packets
     """
     if categories is None:
         categories = DEFAULT_CATEGORIES
+
+    # Filter to categories the device actually supports
+    if available_categories:
+        categories = [c for c in categories if c in available_categories]
 
     cat_lines = "\n".join(
         f'      atrace_categories: "{c}"' for c in categories
@@ -273,8 +359,12 @@ def capture_trace(
     if serial:
         cmd_prefix += ["-s", serial]
 
-    api_level = _get_api_level(serial)
-    config = _build_config(duration_s, categories, buffer_size_kb, package, api_level)
+    caps = get_device_capabilities(serial)
+    config = _build_config(
+        duration_s, categories, buffer_size_kb, package,
+        api_level=caps["api_level"],
+        available_categories=caps.get("available_categories"),
+    )
 
     # Use Popen (non-blocking) so we can launch the app while tracing
     # --txt flag needed for text-format configs on most Android devices
@@ -340,9 +430,10 @@ def capture_memory_trace(
     if serial:
         cmd_prefix += ["-s", serial]
 
-    api_level = _get_api_level(serial)
+    caps = get_device_capabilities(serial)
     config = _build_memory_config(
-        duration_s, package, heap_sampling_bytes, java_heap, native_heap, api_level
+        duration_s, package, heap_sampling_bytes, java_heap, native_heap,
+        api_level=caps["api_level"],
     )
 
     proc = subprocess.Popen(
