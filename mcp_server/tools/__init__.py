@@ -8,3 +8,4 @@ from mcp_server.tools import scheduling  # noqa: F401
 from mcp_server.tools import binder  # noqa: F401
 from mcp_server.tools import anr  # noqa: F401
 from mcp_server.tools import heap  # noqa: F401
+from mcp_server.tools import capture_tools  # noqa: F401
