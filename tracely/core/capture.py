@@ -182,6 +182,7 @@ def _build_config(
     package: str = "",
     api_level: int = 0,
     available_categories: list = None,
+    max_file_size_mb: int = 0,
 ) -> str:
     """Build a Perfetto text-format trace config.
 
@@ -294,6 +295,16 @@ data_sources {{
 """
 
     config += f"duration_ms: {duration_s * 1000}\n"
+
+    # Long trace mode: stream to file on device instead of ring buffer
+    if duration_s > 60:
+        config += f"""
+write_into_file: true
+file_write_period_ms: 2500
+flush_period_ms: 30000
+max_file_size_bytes: {max_file_size_mb * 1024 * 1024 if max_file_size_mb else 0}
+"""
+
     return config
 
 
@@ -470,3 +481,125 @@ def capture_memory_trace(
     )
 
     return {"path": local_path, "duration_s": duration_s}
+
+
+# --- Live tracing state ---
+_live_trace_proc = None
+_live_trace_serial = ""
+
+
+def live_trace_start(
+    package: str = "",
+    categories: list = None,
+    max_file_size_mb: int = 500,
+    serial: str = "",
+) -> dict:
+    """Start a long-running trace. Call live_trace_stop() to stop and pull.
+
+    Uses write_into_file mode for unlimited duration without buffer overflow.
+    Trace streams to disk on device. Max file size caps the output.
+    """
+    global _live_trace_proc, _live_trace_serial
+
+    if _live_trace_proc is not None and _live_trace_proc.poll() is None:
+        return {"error": "A live trace is already running. Stop it first."}
+
+    cmd_prefix = ["adb"]
+    if serial:
+        cmd_prefix += ["-s", serial]
+
+    caps = get_device_capabilities(serial)
+
+    config = _build_config(
+        duration_s=3600,
+        categories=categories,
+        buffer_size_kb=32768,
+        package=package,
+        api_level=caps["api_level"],
+        available_categories=caps.get("available_categories"),
+        max_file_size_mb=max_file_size_mb,
+    )
+
+    if "write_into_file: true" not in config:
+        config += f"""
+write_into_file: true
+file_write_period_ms: 2500
+flush_period_ms: 30000
+max_file_size_bytes: {max_file_size_mb * 1024 * 1024}
+"""
+
+    proc = subprocess.Popen(
+        cmd_prefix + ["shell", "perfetto", "--txt", "-c", "-", "-o", DEVICE_TRACE_PATH],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    proc.stdin.write(config)
+    proc.stdin.close()
+
+    _live_trace_proc = proc
+    _live_trace_serial = serial
+
+    time.sleep(1)
+    if proc.poll() is not None:
+        _, stderr = proc.communicate()
+        _live_trace_proc = None
+        return {"error": f"Perfetto failed to start: {stderr}"}
+
+    return {
+        "status": "tracing",
+        "message": "Live trace started. Use the app, then call live-trace-stop to finish.",
+        "max_file_size_mb": max_file_size_mb,
+        "device": caps.get("model", ""),
+    }
+
+
+def live_trace_stop(serial: str = "") -> dict:
+    """Stop a live trace, pull it from device, return local path."""
+    global _live_trace_proc, _live_trace_serial
+
+    if _live_trace_proc is None or _live_trace_proc.poll() is not None:
+        return {"error": "No live trace running. Start one first."}
+
+    cmd_prefix = ["adb"]
+    s = serial or _live_trace_serial
+    if s:
+        cmd_prefix += ["-s", s]
+
+    _live_trace_proc.terminate()
+    try:
+        _live_trace_proc.communicate(timeout=15)
+    except subprocess.TimeoutExpired:
+        _live_trace_proc.kill()
+        _live_trace_proc.communicate()
+
+    _live_trace_proc = None
+
+    local_path = _generate_trace_path("live")
+    pull = subprocess.run(
+        cmd_prefix + ["pull", DEVICE_TRACE_PATH, local_path],
+        capture_output=True, text=True, timeout=300,
+    )
+
+    if pull.returncode != 0:
+        return {"error": f"Failed to pull trace: {pull.stderr}"}
+
+    file_size_mb = os.path.getsize(local_path) / 1024 / 1024
+
+    subprocess.run(
+        cmd_prefix + ["shell", "rm", "-f", DEVICE_TRACE_PATH],
+        capture_output=True, timeout=5,
+    )
+
+    return {"path": local_path, "file_size_mb": round(file_size_mb, 1)}
+
+
+def live_trace_status() -> dict:
+    """Check if a live trace is currently running."""
+    global _live_trace_proc
+    if _live_trace_proc is None:
+        return {"status": "idle"}
+    if _live_trace_proc.poll() is not None:
+        return {"status": "finished", "message": "Trace finished. Call live-trace-stop to pull it."}
+    return {"status": "tracing", "message": "Trace is running. Call live-trace-stop when done."}

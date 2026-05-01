@@ -199,3 +199,73 @@ def list_android_devices() -> str:
         d.update(info)
 
     return json.dumps({"devices": devices})
+
+
+@mcp.tool()
+async def live_trace_start(
+    package: str = "",
+    max_file_size_mb: int = 500,
+) -> str:
+    """Start a long-running trace on the connected device.
+
+    Unlike capture-trace (which has a fixed duration), this runs
+    indefinitely until you call live-trace-stop. Use for:
+    - Long user journeys (5-30 minutes)
+    - Reproducing intermittent bugs
+    - Monitoring app behavior over time
+
+    Data streams to a file on device (no buffer overflow).
+    Max file size prevents filling device storage.
+
+    Args:
+        package: Package name to filter (e.g., "com.example.app")
+        max_file_size_mb: Max trace file size in MB (default: 500)
+    """
+    err = device.check_adb()
+    if err:
+        return json.dumps({"error": err})
+
+    devices = device.list_devices()
+    if not devices:
+        return json.dumps({"error": "No device connected."})
+
+    import asyncio
+    result = await asyncio.to_thread(
+        capture.live_trace_start,
+        package=package,
+        max_file_size_mb=max_file_size_mb,
+    )
+    return json.dumps(result)
+
+
+@mcp.tool()
+async def live_trace_stop(alias: str = "default") -> str:
+    """Stop a running live trace, pull it from device, and auto-load it.
+
+    Call this after live-trace-start when you're done with your test session.
+    The trace is pulled from the device and loaded for analysis.
+
+    Args:
+        alias: Alias for the loaded trace (default: "default")
+    """
+    import asyncio
+    result = await asyncio.to_thread(capture.live_trace_stop)
+
+    if "error" in result:
+        return json.dumps(result)
+
+    try:
+        trace_manager.load_trace(result["path"], alias)
+        result["status"] = "stopped_and_loaded"
+        result["alias"] = alias
+    except Exception as e:
+        result["status"] = "stopped_but_load_failed"
+        result["error"] = str(e)
+
+    return json.dumps(result)
+
+
+@mcp.tool()
+def live_trace_status() -> str:
+    """Check if a live trace is currently running."""
+    return json.dumps(capture.live_trace_status())
