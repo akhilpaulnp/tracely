@@ -37,7 +37,7 @@ def detect_anr(package: str = "", alias: str = "default") -> str:
         JOIN thread_track tt ON s.track_id = tt.id
         JOIN thread t ON tt.utid = t.utid
         JOIN process p ON t.upid = p.upid
-        WHERE t.is_main_thread = 1
+        WHERE t.tid = p.pid
         AND s.dur > 5000000000
         {where}
         ORDER BY s.dur DESC

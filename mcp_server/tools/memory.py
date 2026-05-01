@@ -25,10 +25,11 @@ def analyze_memory(package: str = "", alias: str = "default") -> str:
         safe_pkg = package.replace("'", "''")
         where = f"AND p.name LIKE '%{safe_pkg}%'"
 
+    # counter table has no name column -- name is on the track
     sql = f"""
         SELECT
             p.name as process_name,
-            c.name as counter_name,
+            pct.name as counter_name,
             ROUND(MIN(c.value), 0) as min_value,
             ROUND(MAX(c.value), 0) as max_value,
             ROUND(AVG(c.value), 0) as avg_value,
@@ -36,10 +37,10 @@ def analyze_memory(package: str = "", alias: str = "default") -> str:
         FROM counter c
         JOIN process_counter_track pct ON c.track_id = pct.id
         JOIN process p ON pct.upid = p.upid
-        WHERE (c.name LIKE '%rss%' OR c.name LIKE '%pss%'
-               OR c.name LIKE '%swap%' OR c.name LIKE '%mem%')
+        WHERE (pct.name LIKE '%rss%' OR pct.name LIKE '%pss%'
+               OR pct.name LIKE '%swap%' OR pct.name LIKE '%mem%')
         {where}
-        GROUP BY p.name, c.name
+        GROUP BY p.name, pct.name
         ORDER BY max_value DESC
     """
     return query_engine.run_query(tp, sql)

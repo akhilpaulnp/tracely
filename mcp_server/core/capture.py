@@ -1,6 +1,7 @@
 """Trace capture orchestration via adb."""
 import subprocess
 import os
+import time
 from datetime import datetime
 
 TRACES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "traces")
@@ -25,9 +26,13 @@ def _build_config(
     package: str = "",
 ) -> str:
     """Build a Perfetto text-format trace config."""
-    pkg_filter = ""
+    cat_lines = "\n".join(
+        f'      atrace_categories: "{c.strip()}"'
+        for c in categories.split(",") if c.strip()
+    )
+    pkg_line = ""
     if package:
-        pkg_filter = f'\n    atrace_apps: "{package}"'
+        pkg_line = f'\n      atrace_apps: "{package}"'
 
     return f"""buffers {{
   size_kb: {buffer_size_kb}
@@ -40,7 +45,7 @@ data_sources {{
       ftrace_events: "sched/sched_switch"
       ftrace_events: "power/suspend_resume"
       ftrace_events: "power/cpu_frequency"
-      atrace_categories: "{categories}"{pkg_filter}
+{cat_lines}{pkg_line}
     }}
   }}
 }}
@@ -73,9 +78,9 @@ def capture_trace(
     config = _build_config(duration_s, categories, buffer_size_kb, package)
 
     # Use Popen (non-blocking) so we can launch the app while tracing
-    import time
+    # --txt flag needed for text-format configs on most Android devices
     proc = subprocess.Popen(
-        cmd_prefix + ["shell", "perfetto", "-c", "-", "-o", DEVICE_TRACE_PATH],
+        cmd_prefix + ["shell", "perfetto", "--txt", "-c", "-", "-o", DEVICE_TRACE_PATH],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,

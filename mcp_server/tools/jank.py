@@ -32,7 +32,7 @@ def analyze_jank(package: str = "", alias: str = "default") -> str:
         SELECT
             p.name as process_name,
             COUNT(*) as total_frames,
-            SUM(CASE WHEN afts.jank_type != 'None' THEN 1 ELSE 0 END) as janky_frames,
+            SUM(CASE WHEN afts.jank_type != 0 THEN 1 ELSE 0 END) as janky_frames,
             ROUND(AVG(afts.dur) / 1e6, 2) as avg_frame_dur_ms,
             ROUND(MAX(afts.dur) / 1e6, 2) as max_frame_dur_ms
         FROM actual_frame_timeline_slice afts

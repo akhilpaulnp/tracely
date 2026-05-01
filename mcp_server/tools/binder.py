@@ -37,7 +37,7 @@ def analyze_binder(package: str = "", alias: str = "default") -> str:
         JOIN thread_track tt ON s.track_id = tt.id
         JOIN thread t ON tt.utid = t.utid
         JOIN process p ON t.upid = p.upid
-        WHERE s.name LIKE 'binder%%' {where}
+        WHERE s.name LIKE 'binder%' {where}
         GROUP BY p.name, s.name
         ORDER BY call_count DESC
         LIMIT 50

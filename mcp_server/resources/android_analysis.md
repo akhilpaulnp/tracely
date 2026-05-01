@@ -11,7 +11,7 @@
 |-------|------------|
 | slice | All trace events (functions, system events) with ts, dur, name, track_id |
 | process | Process metadata: pid, name, uid, upid (internal ID) |
-| thread | Thread metadata: tid, name, utid, upid, is_main_thread |
+| thread | Thread metadata: tid, name, utid, upid (main thread: tid = pid) |
 | thread_track | Links track_id to utid (for joining slice to thread) |
 | process_track | Links track_id to upid |
 | sched_slice | CPU scheduling events: ts, dur, utid, cpu, state |
@@ -57,7 +57,7 @@ SELECT process_name, jank_type, dur FROM android_frames_timeline;
 ```sql
 INCLUDE PERFETTO MODULE android.startups.startups;
 -- Then in a separate query:
-SELECT package, startup_type, dur, time_to_initial_display FROM android_startups;
+SELECT package, startup_type, ROUND(dur / 1e6, 2) as duration_ms FROM android_startups;
 ```
 
 ### Memory Counters
