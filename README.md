@@ -1,6 +1,6 @@
-# Perfetto MCP Server
+# Tracely
 
-MCP server that gives Claude deep access to Android performance trace analysis via Perfetto. 33 tools covering trace capture, jank analysis, startup profiling, memory/heap inspection, GC analysis, lock contention, input latency, and more. Adaptive capture config probes device capabilities before recording.
+AI-powered Android trace analysis. 33 MCP tools that give Claude deep access to Perfetto for performance debugging -- capture traces, analyze jank, profile startup, inspect heap allocations, detect memory leaks, and more. Adaptive capture config probes device capabilities before recording.
 
 ## Requirements
 
@@ -10,8 +10,8 @@ MCP server that gives Claude deep access to Android performance trace analysis v
 ## Quick Install
 
 ```bash
-git clone https://github.com/AkhilPaulnp/PerfettoAI.git
-cd PerfettoAI
+git clone https://github.com/AkhilPaulnp/tracely.git
+cd tracely
 python3 -m venv .venv
 source .venv/bin/activate
 pip install mcp perfetto
@@ -37,9 +37,9 @@ Add to your Claude Code settings or project `.mcp.json`:
 {
   "mcpServers": {
     "perfetto": {
-      "command": "/path/to/PerfettoAI/.venv/bin/python3",
+      "command": "/path/to/tracely/.venv/bin/python3",
       "args": ["-m", "mcp_server"],
-      "cwd": "/path/to/PerfettoAI"
+      "cwd": "/path/to/tracely"
     }
   }
 }

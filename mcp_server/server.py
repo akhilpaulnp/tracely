@@ -1,7 +1,7 @@
 import os
 from mcp.server.fastmcp import FastMCP
 
-mcp = FastMCP("perfetto")
+mcp = FastMCP("tracely")
 
 RESOURCES_DIR = os.path.join(os.path.dirname(__file__), "resources")
 

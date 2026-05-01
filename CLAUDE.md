@@ -1,4 +1,4 @@
-# Perfetto MCP Server - Project Instructions
+# Tracely - Project Instructions
 
 ## Overview
 

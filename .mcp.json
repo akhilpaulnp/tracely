@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "perfetto": {
+    "tracely": {
       "command": ".venv/bin/python3",
       "args": ["-m", "mcp_server"]
     }
