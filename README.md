@@ -2,11 +2,21 @@
 
 AI-powered Android trace analysis. 33 MCP tools that give Claude deep access to Perfetto for performance debugging -- capture traces, analyze jank, profile startup, inspect heap allocations, detect memory leaks, and more. Adaptive capture config probes device capabilities before recording.
 
-## Install
+## Install (one command)
 
-### Claude Code (one command)
+### Claude Code
 ```bash
-claude mcp add tracely -- uvx tracely
+claude mcp add tracely -- uvx --from git+https://github.com/akhilpaulnp/tracely tracely
+```
+
+### OpenAI Codex
+```bash
+codex mcp add tracely -- uvx --from git+https://github.com/akhilpaulnp/tracely tracely
+```
+
+### Google Gemini CLI
+```bash
+gemini mcp add tracely -- uvx --from git+https://github.com/akhilpaulnp/tracely tracely
 ```
 
 ### Cursor / Windsurf
@@ -16,7 +26,7 @@ Add to MCP settings:
   "mcpServers": {
     "tracely": {
       "command": "uvx",
-      "args": ["tracely"]
+      "args": ["--from", "git+https://github.com/akhilpaulnp/tracely", "tracely"]
     }
   }
 }
@@ -24,12 +34,12 @@ Add to MCP settings:
 
 ### pip
 ```bash
-pip install tracely
+pip install git+https://github.com/akhilpaulnp/tracely.git
 ```
 
 ### From source
 ```bash
-git clone https://github.com/AkhilPaulnp/tracely.git
+git clone https://github.com/akhilpaulnp/tracely.git
 cd tracely
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
