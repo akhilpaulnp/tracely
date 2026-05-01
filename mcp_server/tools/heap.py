@@ -85,3 +85,48 @@ def analyze_heap_java(package: str = "", alias: str = "default") -> str:
         LIMIT 30
     """
     return query_engine.run_query(tp, sql)
+
+
+@mcp.tool()
+def analyze_heap_dominators(package: str = "", alias: str = "default") -> str:
+    """Analyze Java heap dominator tree: which objects retain the most memory.
+
+    Shows the top objects by retained (dominated) size -- the amount of memory
+    that would be freed if this object were garbage collected.
+    This is the key tool for finding memory leaks.
+
+    Args:
+        package: Optional package name to filter
+        alias: Trace alias (default: "default")
+    """
+    err = trace_manager.require_trace(alias)
+    if err:
+        return json.dumps({"error": err})
+
+    tp = trace_manager.get_trace(alias)
+    query_engine.ensure_module(tp, "android.memory.heap_graph.dominator_tree")
+
+    where = ""
+    if package:
+        safe_pkg = package.replace("'", "''")
+        where = f"AND p.name LIKE '%{safe_pkg}%'"
+
+    sql = f"""
+        SELECT
+            p.name as process_name,
+            hgc.name as class_name,
+            COUNT(*) as instance_count,
+            ROUND(SUM(d.dominated_size_bytes) / 1024.0, 2) as total_retained_kb,
+            ROUND(MAX(d.dominated_size_bytes) / 1024.0, 2) as max_retained_kb,
+            ROUND(SUM(d.dominated_native_size_bytes) / 1024.0, 2) as total_native_kb,
+            SUM(d.dominated_obj_count) as total_dominated_objects
+        FROM heap_graph_dominator_tree d
+        JOIN heap_graph_object hgo ON d.id = hgo.id
+        JOIN heap_graph_class hgc ON hgo.type_id = hgc.id
+        JOIN process p ON hgo.upid = p.upid
+        WHERE d.depth <= 3 {where}
+        GROUP BY p.name, hgc.name
+        ORDER BY total_retained_kb DESC
+        LIMIT 30
+    """
+    return query_engine.run_query(tp, sql)

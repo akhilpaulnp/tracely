@@ -81,6 +81,28 @@ WHERE s.name LIKE 'binder%'
 GROUP BY p.name, s.name ORDER BY COUNT(*) DESC;
 ```
 
+## Advanced Analysis Tables (via stdlib modules)
+
+| Module | Table | What it provides |
+|--------|-------|-----------------|
+| android.startup.time_to_display | android_startup_time_to_display | TTID and TTFD metrics per startup |
+| android.startup.startup_breakdowns | android_startup_opinionated_breakdown | Startup delay breakdown by cause |
+| android.garbage_collection | android_garbage_collection_events | GC type, duration, heap before/after |
+| android.critical_blocking_calls | _android_critical_blocking_calls | Known blocking patterns on main thread |
+| android.monitor_contention | android_monitor_contention | Lock contention: who blocks whom |
+| android.input | android_input_events | Input dispatch/handling/ACK latency |
+| android.memory.lmk | android_lmk_events | Low Memory Killer kills with reason |
+| android.oom_adjuster | android_oom_adj_intervals | OOM priority score changes |
+| android.network_packets | android_network_packets | Per-app network traffic |
+| android.surfaceflinger | android_surfaceflinger_workloads | SF rendering pipeline per-stage timing |
+| android.memory.heap_graph.dominator_tree | heap_graph_dominator_tree | Retained memory per object (leak detection) |
+
+Load these modules before querying:
+```sql
+-- Always in a SEPARATE query before your data query
+INCLUDE PERFETTO MODULE android.garbage_collection;
+```
+
 ## Recommended Analysis Workflow
 
 1. Load trace and check **trace-summary** for overview

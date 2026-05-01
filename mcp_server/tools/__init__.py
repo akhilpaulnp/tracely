@@ -9,3 +9,12 @@ from mcp_server.tools import binder  # noqa: F401
 from mcp_server.tools import anr  # noqa: F401
 from mcp_server.tools import heap  # noqa: F401
 from mcp_server.tools import capture_tools  # noqa: F401
+from mcp_server.tools import gc  # noqa: F401
+from mcp_server.tools import blocking  # noqa: F401
+from mcp_server.tools import contention  # noqa: F401
+from mcp_server.tools import input_latency  # noqa: F401
+from mcp_server.tools import lmk  # noqa: F401
+from mcp_server.tools import oom  # noqa: F401
+from mcp_server.tools import network  # noqa: F401
+from mcp_server.tools import surfaceflinger  # noqa: F401
+from mcp_server.tools import regression  # noqa: F401
