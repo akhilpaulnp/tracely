@@ -37,32 +37,36 @@ class QueryEngine:
         """
         try:
             result = tp.query(sql)
+            columns = result.column_names()
+            rows = []
+            truncated = False
+
+            for row in result:
+                if len(rows) >= max_rows:
+                    truncated = True
+                    break
+                row_dict = {}
+                for col in columns:
+                    val = getattr(row, col)
+                    if isinstance(val, bytes):
+                        val = val.hex()
+                    row_dict[col] = val
+                rows.append(row_dict)
+
+            return json.dumps({
+                "columns": columns,
+                "rows": rows,
+                "row_count": len(rows),
+                "truncated": truncated,
+            })
         except PerfettoException as e:
             return json.dumps({
                 "error": str(e),
                 "sql": sql,
                 "suggestion": "Check SQL syntax. Use list-tables to see available tables.",
             })
-
-        columns = result.column_names()
-        rows = []
-        truncated = False
-
-        for row in result:
-            if len(rows) >= max_rows:
-                truncated = True
-                break
-            row_dict = {}
-            for col in columns:
-                val = getattr(row, col)
-                if isinstance(val, bytes):
-                    val = val.hex()
-                row_dict[col] = val
-            rows.append(row_dict)
-
-        return json.dumps({
-            "columns": columns,
-            "rows": rows,
-            "row_count": len(rows),
-            "truncated": truncated,
-        })
+        except Exception as e:
+            return json.dumps({
+                "error": f"Query execution error: {e}",
+                "sql": sql,
+            })

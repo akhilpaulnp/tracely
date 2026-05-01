@@ -72,23 +72,36 @@ def capture_trace(
 
     config = _build_config(duration_s, categories, buffer_size_kb, package)
 
-    proc = subprocess.run(
+    # Use Popen (non-blocking) so we can launch the app while tracing
+    import time
+    proc = subprocess.Popen(
         cmd_prefix + ["shell", "perfetto", "-c", "-", "-o", DEVICE_TRACE_PATH],
-        input=config,
-        capture_output=True,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
-        timeout=duration_s + 30,
     )
+    proc.stdin.write(config)
+    proc.stdin.close()
 
-    if proc.returncode != 0:
-        return {"error": f"Perfetto failed: {proc.stderr}"}
-
+    # Launch app after a short delay for perfetto to start collecting
     if launch_app and package:
+        time.sleep(2)
         subprocess.run(
             cmd_prefix + ["shell", "monkey", "-p", package, "-c",
                          "android.intent.category.LAUNCHER", "1"],
             capture_output=True, timeout=10,
         )
+
+    # Wait for perfetto to finish (it runs for duration_ms then exits)
+    try:
+        _, stderr = proc.communicate(timeout=duration_s + 30)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        return {"error": "Perfetto capture timed out"}
+
+    if proc.returncode != 0:
+        return {"error": f"Perfetto failed: {stderr}"}
 
     local_path = _generate_trace_path(package)
     pull = subprocess.run(

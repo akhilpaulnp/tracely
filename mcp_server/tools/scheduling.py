@@ -26,19 +26,20 @@ def analyze_scheduling(package: str = "", alias: str = "default") -> str:
         safe_pkg = package.replace("'", "''")
         where = f"AND p.name LIKE '%{safe_pkg}%'"
 
+    # Use thread_state table (has state column) instead of sched_slice (has end_state)
     sql = f"""
         SELECT
             p.name as process_name,
             t.name as thread_name,
             t.tid,
-            ROUND(SUM(CASE WHEN ss.state = 'Running' THEN ss.dur ELSE 0 END) / 1e6, 2) as running_ms,
-            ROUND(SUM(CASE WHEN ss.state IN ('R', 'R+') THEN ss.dur ELSE 0 END) / 1e6, 2) as runnable_ms,
-            ROUND(SUM(CASE WHEN ss.state = 'S' THEN ss.dur ELSE 0 END) / 1e6, 2) as sleeping_ms,
-            ROUND(SUM(CASE WHEN ss.state IN ('D', 'DK') THEN ss.dur ELSE 0 END) / 1e6, 2) as uninterruptible_ms
-        FROM sched_slice ss
+            ROUND(SUM(CASE WHEN ts.state = 'Running' THEN ts.dur ELSE 0 END) / 1e6, 2) as running_ms,
+            ROUND(SUM(CASE WHEN ts.state IN ('R', 'R+') THEN ts.dur ELSE 0 END) / 1e6, 2) as runnable_ms,
+            ROUND(SUM(CASE WHEN ts.state = 'S' THEN ts.dur ELSE 0 END) / 1e6, 2) as sleeping_ms,
+            ROUND(SUM(CASE WHEN ts.state IN ('D', 'DK') THEN ts.dur ELSE 0 END) / 1e6, 2) as uninterruptible_ms
+        FROM thread_state ts
         JOIN thread t USING (utid)
         JOIN process p USING (upid)
-        WHERE ss.dur > 0 {where}
+        WHERE ts.dur > 0 {where}
         GROUP BY p.name, t.name, t.tid
         ORDER BY running_ms DESC
         LIMIT 50

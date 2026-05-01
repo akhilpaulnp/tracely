@@ -27,14 +27,15 @@ def analyze_startup(package: str = "", alias: str = "default") -> str:
         safe_pkg = package.replace("'", "''")
         where = f"WHERE package LIKE '%{safe_pkg}%'"
 
+    # android_startups view has: startup_id, ts, ts_end, dur, package, startup_type
+    # time_to_initial_display / time_to_full_display are NOT columns on this view
     sql = f"""
         SELECT
             package,
             startup_type,
             ROUND(dur / 1e6, 2) as duration_ms,
             ts,
-            ROUND(time_to_initial_display / 1e6, 2) as ttid_ms,
-            ROUND(time_to_full_display / 1e6, 2) as ttfd_ms
+            ts_end
         FROM android_startups
         {where}
         ORDER BY ts
