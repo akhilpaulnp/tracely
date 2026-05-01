@@ -7,28 +7,42 @@ MCP server that gives Claude deep access to Android performance trace analysis v
 - **Python 3.9+**
 - **adb** (Android SDK platform-tools) -- only needed for device capture
 
-adb install: `brew install android-platform-tools` (Mac) or download [platform-tools](https://developer.android.com/tools/releases/platform-tools)
-
-## Setup
+## Quick Install
 
 ```bash
-# 1. Create virtual environment
+git clone https://github.com/AkhilPaulnp/PerfettoAI.git
+cd PerfettoAI
 python3 -m venv .venv
 source .venv/bin/activate
-
-# 2. Install dependencies (only 2 packages needed)
 pip install mcp perfetto
-
-# 3. Done -- .mcp.json is already configured for Claude Code
 ```
 
-The Perfetto `trace_processor_shell` binary is auto-downloaded on first use. No manual setup needed.
+That's it. The `.mcp.json` is included -- Claude Code auto-connects the server.
 
-### Verify installation
+For device capture, install adb: `brew install android-platform-tools` (Mac) or download [platform-tools](https://developer.android.com/tools/releases/platform-tools)
+
+The Perfetto `trace_processor_shell` binary is auto-downloaded on first use.
+
+### Verify
 
 ```bash
 source .venv/bin/activate
 PYTHONPATH=. python -c "from mcp_server.server import mcp; import mcp_server.tools; print(f'{len(mcp._tool_manager._tools)} tools registered')"
+```
+
+### Manual MCP config (if .mcp.json doesn't auto-connect)
+
+Add to your Claude Code settings or project `.mcp.json`:
+```json
+{
+  "mcpServers": {
+    "perfetto": {
+      "command": "/path/to/PerfettoAI/.venv/bin/python3",
+      "args": ["-m", "mcp_server"],
+      "cwd": "/path/to/PerfettoAI"
+    }
+  }
+}
 ```
 
 ## Usage
