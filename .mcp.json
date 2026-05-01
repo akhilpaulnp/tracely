@@ -1,8 +1,7 @@
 {
   "mcpServers": {
     "tracely": {
-      "command": ".venv/bin/python3",
-      "args": ["-m", "mcp_server"]
+      "command": ".venv/bin/tracely"
     }
   }
 }

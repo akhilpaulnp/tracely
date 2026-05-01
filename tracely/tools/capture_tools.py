@@ -1,9 +1,9 @@
 """Device trace capture tools."""
 import json
 import asyncio
-from mcp_server.server import mcp
-from mcp_server.tools.core_tools import trace_manager
-from mcp_server.core import device, capture
+from tracely.server import mcp
+from tracely.tools.core_tools import trace_manager
+from tracely.core import device, capture
 
 
 @mcp.tool()

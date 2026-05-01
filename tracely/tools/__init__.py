@@ -1,0 +1,21 @@
+"""Import all tool modules to register their @mcp.tool() decorators."""
+from tracely.tools import core_tools  # noqa: F401
+from tracely.tools import query_tools  # noqa: F401
+from tracely.tools import jank  # noqa: F401
+from tracely.tools import startup  # noqa: F401
+from tracely.tools import memory  # noqa: F401
+from tracely.tools import scheduling  # noqa: F401
+from tracely.tools import binder  # noqa: F401
+from tracely.tools import anr  # noqa: F401
+from tracely.tools import heap  # noqa: F401
+from tracely.tools import capture_tools  # noqa: F401
+from tracely.tools import gc  # noqa: F401
+from tracely.tools import blocking  # noqa: F401
+from tracely.tools import contention  # noqa: F401
+from tracely.tools import input_latency  # noqa: F401
+from tracely.tools import lmk  # noqa: F401
+from tracely.tools import oom  # noqa: F401
+from tracely.tools import network  # noqa: F401
+from tracely.tools import surfaceflinger  # noqa: F401
+from tracely.tools import regression  # noqa: F401
+from tracely.tools import diagnose  # noqa: F401

@@ -1,9 +1,9 @@
 """Core trace management tools."""
 import json
 import os
-from mcp_server.server import mcp
-from mcp_server.core.trace_manager import TraceManager
-from mcp_server.core.query_engine import QueryEngine
+from tracely.server import mcp
+from tracely.core.trace_manager import TraceManager
+from tracely.core.query_engine import QueryEngine
 
 # Shared instances used by all tool modules
 trace_manager = TraceManager()

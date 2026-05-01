@@ -1,7 +1,7 @@
 """Critical blocking call detection tools."""
 import json
-from mcp_server.server import mcp
-from mcp_server.tools.core_tools import trace_manager, query_engine
+from tracely.server import mcp
+from tracely.tools.core_tools import trace_manager, query_engine
 
 
 @mcp.tool()

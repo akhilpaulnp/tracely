@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, patch
-from mcp_server.core.trace_manager import TraceManager
+from tracely.core.trace_manager import TraceManager
 
 
 class TestTraceManager:
@@ -15,14 +15,14 @@ class TestTraceManager:
         assert result is not None
         assert "no trace" in result.lower()
 
-    @patch("mcp_server.core.trace_manager.TraceProcessor")
+    @patch("tracely.core.trace_manager.TraceProcessor")
     def test_load_trace_success(self, mock_tp_class):
         mock_tp = MagicMock()
         mock_tp_class.return_value = mock_tp
         self.tm.load_trace("/fake/trace.perfetto-trace", "test")
         assert "test" in [t["alias"] for t in self.tm.list_traces()]
 
-    @patch("mcp_server.core.trace_manager.TraceProcessor")
+    @patch("tracely.core.trace_manager.TraceProcessor")
     def test_load_trace_default_alias(self, mock_tp_class):
         mock_tp_class.return_value = MagicMock()
         self.tm.load_trace("/fake/trace.perfetto-trace")
@@ -30,7 +30,7 @@ class TestTraceManager:
         assert len(traces) == 1
         assert traces[0]["alias"] == "default"
 
-    @patch("mcp_server.core.trace_manager.TraceProcessor")
+    @patch("tracely.core.trace_manager.TraceProcessor")
     def test_max_traces_enforced(self, mock_tp_class):
         mock_tp_class.return_value = MagicMock()
         self.tm.load_trace("/fake/a.trace", "a")
@@ -39,7 +39,7 @@ class TestTraceManager:
         with pytest.raises(RuntimeError, match="(?i)maximum"):
             self.tm.load_trace("/fake/d.trace", "d")
 
-    @patch("mcp_server.core.trace_manager.TraceProcessor")
+    @patch("tracely.core.trace_manager.TraceProcessor")
     def test_close_trace(self, mock_tp_class):
         mock_tp = MagicMock()
         mock_tp_class.return_value = mock_tp
@@ -52,20 +52,20 @@ class TestTraceManager:
         with pytest.raises(KeyError):
             self.tm.close_trace("nonexistent")
 
-    @patch("mcp_server.core.trace_manager.TraceProcessor")
+    @patch("tracely.core.trace_manager.TraceProcessor")
     def test_get_trace(self, mock_tp_class):
         mock_tp = MagicMock()
         mock_tp_class.return_value = mock_tp
         self.tm.load_trace("/fake/trace.perfetto-trace", "test")
         assert self.tm.get_trace("test") is mock_tp
 
-    @patch("mcp_server.core.trace_manager.TraceProcessor")
+    @patch("tracely.core.trace_manager.TraceProcessor")
     def test_require_trace_succeeds_when_loaded(self, mock_tp_class):
         mock_tp_class.return_value = MagicMock()
         self.tm.load_trace("/fake/trace.perfetto-trace", "test")
         assert self.tm.require_trace("test") is None
 
-    @patch("mcp_server.core.trace_manager.TraceProcessor")
+    @patch("tracely.core.trace_manager.TraceProcessor")
     def test_load_replaces_same_alias(self, mock_tp_class):
         mock_tp1 = MagicMock()
         mock_tp2 = MagicMock()

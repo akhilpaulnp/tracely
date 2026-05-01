@@ -1,7 +1,7 @@
 import json
 import pytest
 from unittest.mock import MagicMock, PropertyMock
-from mcp_server.core.query_engine import QueryEngine
+from tracely.core.query_engine import QueryEngine
 
 
 def _make_mock_result(columns, rows_data):

@@ -7,8 +7,8 @@ This is a Python MCP server (33 tools) for Android performance trace analysis us
 ## Project Structure
 
 ```
-mcp_server/
-  __main__.py           # Entry point: python -m mcp_server
+tracely/
+  __main__.py           # Entry point: python -m tracely
   server.py             # FastMCP instance, prompts, resources
   core/
     trace_manager.py    # Multi-trace lifecycle (max 3, thread-safe)
@@ -25,8 +25,8 @@ mcp_server/
 
 ```bash
 source .venv/bin/activate
-PYTHONPATH=. python -m pytest mcp_server/tests/ -v    # Run tests
-PYTHONPATH=.:/path/to/perfetto/python python -m mcp_server  # Run server
+PYTHONPATH=. python -m pytest tracely/tests/ -v    # Run tests
+PYTHONPATH=.:/path/to/perfetto/python python -m tracely  # Run server
 ```
 
 ## Key Patterns
@@ -49,10 +49,10 @@ PYTHONPATH=.:/path/to/perfetto/python python -m mcp_server  # Run server
 
 Tests use mocked TraceProcessor. Run with:
 ```bash
-source .venv/bin/activate && PYTHONPATH=. python -m pytest mcp_server/tests/ -v
+source .venv/bin/activate && PYTHONPATH=. python -m pytest tracely/tests/ -v
 ```
 
 Verify tool registration:
 ```bash
-PYTHONPATH=.:/path/to/perfetto/python python -c "from mcp_server.server import mcp; import mcp_server.tools; print(len(mcp._tool_manager._tools))"
+PYTHONPATH=.:/path/to/perfetto/python python -c "from tracely.server import mcp; import tracely.tools; print(len(mcp._tool_manager._tools))"
 ```

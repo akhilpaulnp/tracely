@@ -43,7 +43,7 @@ def investigate_memory_leak(package: str = "") -> str:
 
 def main():
     """Entry point for the MCP server."""
-    import mcp_server.tools  # noqa: F401
+    import tracely.tools  # noqa: F401
     mcp.run(transport="stdio")
 
 

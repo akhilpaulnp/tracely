@@ -1,7 +1,7 @@
 """Heap profiling analysis tools (native heapprofd + Java java_hprof)."""
 import json
-from mcp_server.server import mcp
-from mcp_server.tools.core_tools import trace_manager, query_engine
+from tracely.server import mcp
+from tracely.tools.core_tools import trace_manager, query_engine
 
 
 @mcp.tool()

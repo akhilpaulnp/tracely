@@ -2,48 +2,45 @@
 
 AI-powered Android trace analysis. 33 MCP tools that give Claude deep access to Perfetto for performance debugging -- capture traces, analyze jank, profile startup, inspect heap allocations, detect memory leaks, and more. Adaptive capture config probes device capabilities before recording.
 
-## Requirements
+## Install
 
-- **Python 3.9+**
-- **adb** (Android SDK platform-tools) -- only needed for device capture
-
-## Quick Install
-
+### Claude Code (one command)
 ```bash
-git clone https://github.com/AkhilPaulnp/tracely.git
-cd tracely
-python3 -m venv .venv
-source .venv/bin/activate
-pip install mcp perfetto
+claude mcp add tracely -- uvx tracely
 ```
 
-That's it. The `.mcp.json` is included -- Claude Code auto-connects the server.
-
-For device capture, install adb: `brew install android-platform-tools` (Mac) or download [platform-tools](https://developer.android.com/tools/releases/platform-tools)
-
-The Perfetto `trace_processor_shell` binary is auto-downloaded on first use.
-
-### Verify
-
-```bash
-source .venv/bin/activate
-PYTHONPATH=. python -c "from mcp_server.server import mcp; import mcp_server.tools; print(f'{len(mcp._tool_manager._tools)} tools registered')"
-```
-
-### Manual MCP config (if .mcp.json doesn't auto-connect)
-
-Add to your Claude Code settings or project `.mcp.json`:
+### Cursor / Windsurf
+Add to MCP settings:
 ```json
 {
   "mcpServers": {
-    "perfetto": {
-      "command": "/path/to/tracely/.venv/bin/python3",
-      "args": ["-m", "mcp_server"],
-      "cwd": "/path/to/tracely"
+    "tracely": {
+      "command": "uvx",
+      "args": ["tracely"]
     }
   }
 }
 ```
+
+### pip
+```bash
+pip install tracely
+```
+
+### From source
+```bash
+git clone https://github.com/AkhilPaulnp/tracely.git
+cd tracely
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e .
+```
+
+### Device capture (optional)
+For capturing traces from Android devices, install adb:
+```bash
+brew install android-platform-tools  # Mac
+```
+Or download [platform-tools](https://developer.android.com/tools/releases/platform-tools). Not needed if you're only analyzing existing `.perfetto-trace` files.
 
 ## Usage
 
@@ -152,8 +149,8 @@ Supports comparing: startup, jank, memory, scheduling, GC metrics.
 ## Architecture
 
 ```
-mcp_server/
-  __main__.py     # Entry point (python -m mcp_server)
+tracely/
+  __main__.py     # Entry point (python -m tracely)
   server.py       # FastMCP instance + prompts + resources
   core/
     trace_manager.py   # Multi-trace lifecycle (max 3 concurrent)

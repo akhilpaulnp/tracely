@@ -5,6 +5,6 @@ __pycache__/
 build/
 dist/
 .DS_Store
-mcp_server/traces/
+tracely/traces/
 perfetto/
 *.perfetto-trace
