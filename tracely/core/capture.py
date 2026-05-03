@@ -217,23 +217,19 @@ def _build_config(
     - Android 12+ (API 31): surfaceflinger.frametimeline
     - Android 14+ (API 34): network_packets
     """
-    is_long = duration_s > 60
-
     if categories is None:
-        categories = LONG_TRACE_CATEGORIES if is_long else DEFAULT_CATEGORIES
+        categories = DEFAULT_CATEGORIES
 
     # Filter to categories the device actually supports
     if available_categories:
         categories = [c for c in categories if c in available_categories]
-
-    ftrace_events = FTRACE_EVENTS_LONG if is_long else FTRACE_EVENTS
 
     cat_lines = "\n".join(
         f'      atrace_categories: "{c}"' for c in categories
     )
 
     ftrace_lines = "\n".join(
-        f'      ftrace_events: "{e}"' for e in ftrace_events
+        f'      ftrace_events: "{e}"' for e in FTRACE_EVENTS
     )
 
     pkg_line = ""
