@@ -61,8 +61,9 @@ After setup, the MCP server connects automatically via Claude Code. Just talk to
 - "Capture a 20 second cold start trace for com.example.app"
 - "What's causing GC pressure in my app?"
 - "Compare startup between baseline and current traces"
+- "Start a live trace for my app" (then use app, then "stop the live trace")
 
-## Tools (33)
+## Tools (36)
 
 ### Trace Management
 | Tool | What it does |
@@ -119,6 +120,13 @@ After setup, the MCP server connects automatically via Claude Code. Just talk to
 |------|-------------|
 | full-startup-analysis | Complete startup report: timing, TTID, breakdown, GC, blocking, contention, dex loading |
 | full-memory-analysis | Complete memory report: counters, GC, class histogram, dominator tree, leak suspects |
+
+### Live Tracing (long duration)
+| Tool | What it does |
+|------|-------------|
+| live-trace-start | Start indefinite trace (streams to file on device, no buffer overflow) |
+| live-trace-stop | Stop live trace, pull from device, auto-load |
+| live-trace-status | Check if a live trace is running |
 
 ### Multi-trace
 | Tool | What it does |
