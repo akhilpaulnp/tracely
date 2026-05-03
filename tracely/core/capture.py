@@ -298,11 +298,14 @@ data_sources {{
 
     # Long trace mode: stream to file on device instead of ring buffer
     if duration_s > 60:
+        # Default max file size: ~4MB/s * duration, capped at 500MB
+        if not max_file_size_mb:
+            max_file_size_mb = min(duration_s * 4, 500)
         config += f"""
 write_into_file: true
 file_write_period_ms: 2500
 flush_period_ms: 30000
-max_file_size_bytes: {max_file_size_mb * 1024 * 1024 if max_file_size_mb else 0}
+max_file_size_bytes: {max_file_size_mb * 1024 * 1024}
 """
 
     return config
