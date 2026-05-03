@@ -323,11 +323,11 @@ data_sources {{
 
     # Long trace mode: stream to file on device instead of ring buffer
     if duration_s > 60:
-        # Default max file size based on data rate:
-        # Short config (~8 categories, 9 ftrace events) = ~0.5-1 MB/s
-        # Estimate 1MB/s with headroom, cap at 500MB
+        # Default max file size based on observed data rate:
+        # Full config (23 categories, 20+ ftrace events) = ~2-3 MB/s
+        # Use 3MB/s estimate with headroom, cap at 1GB
         if not max_file_size_mb:
-            max_file_size_mb = min(duration_s * 1, 500)
+            max_file_size_mb = min(duration_s * 3, 1024)
         config += f"""
 write_into_file: true
 file_write_period_ms: 2500
