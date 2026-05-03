@@ -6,5 +6,6 @@ build/
 dist/
 .DS_Store
 tracely/traces/
+*.perfetto-trace
 perfetto/
 *.perfetto-trace

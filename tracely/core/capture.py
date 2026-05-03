@@ -4,8 +4,34 @@ import os
 import time
 from datetime import datetime
 
-TRACES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "traces")
+TRACELY_HOME = os.path.join(os.path.expanduser("~"), ".tracely")
 DEVICE_TRACE_PATH = "/data/misc/perfetto-traces/mcp_trace.perfetto-trace"
+
+
+def _get_repo_name() -> str:
+    """Detect the current git repo name. Returns empty string if not in a repo."""
+    try:
+        r = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, timeout=3,
+        )
+        if r.returncode == 0:
+            return os.path.basename(r.stdout.strip())
+    except Exception:
+        pass
+    return ""
+
+
+def _get_traces_dir() -> str:
+    """Get the traces directory based on repo context.
+
+    ~/.tracely/traces/              -- when not in a git repo
+    ~/.tracely/<repo-name>/traces/  -- when inside a git repo
+    """
+    repo = _get_repo_name()
+    if repo:
+        return os.path.join(TRACELY_HOME, repo, "traces")
+    return os.path.join(TRACELY_HOME, "traces")
 
 # Default atrace categories matching Perfetto UI's default Android preset
 DEFAULT_CATEGORIES = [
@@ -94,15 +120,12 @@ LONG_TRACE_CATEGORIES = [
 ]
 
 
-def _ensure_traces_dir():
-    os.makedirs(TRACES_DIR, exist_ok=True)
-
-
 def _generate_trace_path(package: str = "") -> str:
-    _ensure_traces_dir()
+    traces_dir = _get_traces_dir()
+    os.makedirs(traces_dir, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     suffix = f"_{package}" if package else ""
-    return os.path.join(TRACES_DIR, f"trace_{ts}{suffix}.perfetto-trace")
+    return os.path.join(traces_dir, f"trace_{ts}{suffix}.perfetto-trace")
 
 
 def _adb_cmd(args: list, serial: str = "", timeout: int = 5) -> str:
