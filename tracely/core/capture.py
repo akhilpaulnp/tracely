@@ -68,6 +68,31 @@ FTRACE_EVENTS = [
     "ftrace/print",
 ]
 
+# Reduced ftrace events for long traces (>60s) to lower data rate
+FTRACE_EVENTS_LONG = [
+    "sched/sched_switch",
+    "sched/sched_wakeup",
+    "sched/sched_waking",
+    "power/suspend_resume",
+    "power/cpu_frequency",
+    "oom/oom_score_adj_update",
+    "lowmemorykiller/lowmemorykiller_kill",
+    "kmem/rss_stat",
+    "ftrace/print",
+]
+
+# Reduced atrace categories for long traces
+LONG_TRACE_CATEGORIES = [
+    "am",
+    "binder_driver",
+    "dalvik",
+    "gfx",
+    "input",
+    "sched",
+    "view",
+    "wm",
+]
+
 
 def _ensure_traces_dir():
     os.makedirs(TRACES_DIR, exist_ok=True)
@@ -192,19 +217,23 @@ def _build_config(
     - Android 12+ (API 31): surfaceflinger.frametimeline
     - Android 14+ (API 34): network_packets
     """
+    is_long = duration_s > 60
+
     if categories is None:
-        categories = DEFAULT_CATEGORIES
+        categories = LONG_TRACE_CATEGORIES if is_long else DEFAULT_CATEGORIES
 
     # Filter to categories the device actually supports
     if available_categories:
         categories = [c for c in categories if c in available_categories]
+
+    ftrace_events = FTRACE_EVENTS_LONG if is_long else FTRACE_EVENTS
 
     cat_lines = "\n".join(
         f'      atrace_categories: "{c}"' for c in categories
     )
 
     ftrace_lines = "\n".join(
-        f'      ftrace_events: "{e}"' for e in FTRACE_EVENTS
+        f'      ftrace_events: "{e}"' for e in ftrace_events
     )
 
     pkg_line = ""
@@ -298,9 +327,11 @@ data_sources {{
 
     # Long trace mode: stream to file on device instead of ring buffer
     if duration_s > 60:
-        # Default max file size: ~4MB/s * duration, capped at 500MB
+        # Default max file size based on data rate:
+        # Short config (~8 categories, 9 ftrace events) = ~0.5-1 MB/s
+        # Estimate 1MB/s with headroom, cap at 500MB
         if not max_file_size_mb:
-            max_file_size_mb = min(duration_s * 4, 500)
+            max_file_size_mb = min(duration_s * 1, 500)
         config += f"""
 write_into_file: true
 file_write_period_ms: 2500
