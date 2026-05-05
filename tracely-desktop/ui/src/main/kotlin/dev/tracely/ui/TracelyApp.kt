@@ -26,6 +26,7 @@ fun TracelyApp(viewModel: AppViewModel) {
                 "library" -> LibraryScreen(viewModel)
                 "capture" -> CaptureScreen(viewModel)
                 "analysis" -> AnalysisScreen(viewModel)
+                "compare" -> CompareScreen(viewModel)
             }
         }
     }
@@ -56,6 +57,9 @@ fun NavigationSidebar(viewModel: AppViewModel) {
         }
         NavItem("Analysis", Icons.Default.Analytics, viewModel.currentScreen == "analysis") {
             viewModel.currentScreen = "analysis"
+        }
+        NavItem("Compare", Icons.Default.CompareArrows, viewModel.currentScreen == "compare") {
+            viewModel.currentScreen = "compare"
         }
 
         Spacer(Modifier.weight(1f))

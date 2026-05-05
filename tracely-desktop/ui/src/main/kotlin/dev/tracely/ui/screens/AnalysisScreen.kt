@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.tracely.ui.components.charts.AnalysisChart
 import dev.tracely.ui.viewmodel.AppViewModel
 
 @Composable
@@ -114,6 +115,10 @@ fun AnalysisScreen(viewModel: AppViewModel) {
                             style = MaterialTheme.typography.titleSmall,
                         )
                         Spacer(Modifier.height(8.dp))
+
+                        // Chart (if applicable for this tool)
+                        AnalysisChart(viewModel.currentTool, result, Modifier.fillMaxWidth())
+                        Spacer(Modifier.height(12.dp))
 
                         // Scrollable table
                         val scrollState = rememberScrollState()

@@ -12,8 +12,13 @@ import dev.tracely.ui.theme.TracelyTheme
 import dev.tracely.ui.viewmodel.AppViewModel
 
 fun main(args: Array<String>) {
-    // TODO: if "--mcp" in args, run MCP server instead
+    if ("--mcp" in args) {
+        // Run as MCP server (headless, stdio transport)
+        dev.tracely.mcp.main()
+        return
+    }
 
+    // Run as desktop GUI
     application {
         val windowState = rememberWindowState(width = 1200.dp, height = 800.dp)
         val tpManager = remember { TraceProcessorManager() }

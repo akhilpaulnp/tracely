@@ -6,6 +6,7 @@ plugins {
 
 dependencies {
     implementation(project(":core"))
+    implementation(project(":mcp"))
 
     // Compose Desktop
     implementation(compose.desktop.currentOs)
