@@ -33,11 +33,20 @@ async def start_capture(request: Request):
     if _capture_state["status"] == "capturing":
         return JSONResponse({"error": "Capture already in progress"}, status_code=409)
 
-    body = await request.json()
-    duration_s = body.get("duration_s", 10)
+    # Handle both JSON and form-encoded data (HTMX sends form data)
+    content_type = request.headers.get("content-type", "")
+    if "json" in content_type:
+        body = await request.json()
+    else:
+        form = await request.form()
+        body = dict(form)
+
+    duration_s = int(body.get("duration_s", 10))
     package = body.get("package", "")
     launch_app = body.get("launch_app", False)
-    capture_type = body.get("type", "trace")  # "trace" or "memory"
+    if isinstance(launch_app, str):
+        launch_app = launch_app.lower() in ("true", "on", "1")
+    capture_type = body.get("type", "trace")
 
     err = device.check_adb()
     if err:

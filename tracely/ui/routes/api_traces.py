@@ -13,7 +13,13 @@ async def get_traces(request: Request):
 
 
 async def load_trace(request: Request):
-    body = await request.json()
+    content_type = request.headers.get("content-type", "")
+    if "json" in content_type:
+        body = await request.json()
+    else:
+        form = await request.form()
+        body = dict(form)
+
     path = body.get("path", "")
     alias = body.get("alias", "default")
 
