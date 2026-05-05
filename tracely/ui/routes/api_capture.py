@@ -15,13 +15,21 @@ _capture_state = {"status": "idle", "result": None}
 
 
 def _run_capture(capture_fn, kwargs):
-    """Run capture in background thread."""
+    """Run capture in background thread, auto-load trace on success."""
     global _capture_state
     try:
         result = capture_fn(**kwargs)
         if "error" in result:
             _capture_state = {"status": "error", "result": result}
         else:
+            # Auto-load the trace immediately
+            path = result.get("path", "")
+            if path:
+                try:
+                    trace_manager.load_trace(path, "default")
+                    result["auto_loaded"] = True
+                except Exception:
+                    result["auto_loaded"] = False
             _capture_state = {"status": "done", "result": result}
     except Exception as e:
         _capture_state = {"status": "error", "result": {"error": str(e)}}

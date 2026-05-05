@@ -1,18 +1,20 @@
 """Analysis service - registry of tools callable from the UI.
 
 The MCP tool functions use singletons from tracely.tools.core_tools.
-We patch those singletons to point to the UI's own instances so the
-same tool code works in both MCP and UI contexts.
+Each tool module does `from tracely.tools.core_tools import trace_manager`
+which creates a local binding. We must patch BOTH core_tools AND each
+tool module's local reference so they all point to the UI's instances.
 """
 import json
+import sys
 import tracely.tools.core_tools as core_tools
 from tracely.ui.app import trace_manager, query_engine
 
-# Patch the MCP tool module's singletons to use UI instances
+# Patch the core_tools module
 core_tools.trace_manager = trace_manager
 core_tools.query_engine = query_engine
 
-# Now import tool functions (they'll use our patched singletons)
+# Import all tool modules so they're in sys.modules
 from tracely.tools.jank import analyze_jank
 from tracely.tools.startup import analyze_startup, startup_breakdown
 from tracely.tools.memory import analyze_memory
@@ -28,6 +30,25 @@ from tracely.tools.lmk import detect_lmk
 from tracely.tools.network import analyze_network
 from tracely.tools.oom import analyze_oom_priority
 from tracely.tools.surfaceflinger import analyze_surfaceflinger
+
+# Patch each tool module's local trace_manager/query_engine binding.
+# They did `from core_tools import trace_manager` which copied the reference.
+_tool_modules = [
+    "tracely.tools.jank", "tracely.tools.startup", "tracely.tools.memory",
+    "tracely.tools.scheduling", "tracely.tools.binder", "tracely.tools.anr",
+    "tracely.tools.blocking", "tracely.tools.contention", "tracely.tools.gc",
+    "tracely.tools.heap", "tracely.tools.input_latency", "tracely.tools.lmk",
+    "tracely.tools.network", "tracely.tools.oom", "tracely.tools.surfaceflinger",
+    "tracely.tools.query_tools", "tracely.tools.regression", "tracely.tools.diagnose",
+    "tracely.tools.core_tools",
+]
+for _mod_name in _tool_modules:
+    _mod = sys.modules.get(_mod_name)
+    if _mod:
+        if hasattr(_mod, "trace_manager"):
+            _mod.trace_manager = trace_manager
+        if hasattr(_mod, "query_engine"):
+            _mod.query_engine = query_engine
 
 # Tool registry: name -> (function, description, category)
 TOOLS = {
