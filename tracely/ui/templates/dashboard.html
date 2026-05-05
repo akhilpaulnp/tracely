@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h2>Dashboard</h2>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <h3>Device Status</h3>
+        <div id="device-panel" hx-get="/api/devices" hx-trigger="load, every 5s" hx-swap="innerHTML">
+            <p class="muted">Checking devices...</p>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Quick Capture</h3>
+        <form hx-post="/api/capture/start" hx-target="#capture-result" hx-swap="innerHTML">
+            <div class="form-row">
+                <input type="number" name="duration_s" value="10" min="1" max="120" class="input-sm">
+                <span>seconds</span>
+            </div>
+            <div class="form-row">
+                <input type="text" name="package" placeholder="com.example.app" class="input-full">
+            </div>
+            <button type="submit" class="btn btn-primary">Capture Trace</button>
+        </form>
+        <div id="capture-result"></div>
+    </div>
+</div>
+
+<div class="card">
+    <h3>Trace Library</h3>
+    {% if repos %}
+    <table class="table">
+        <thead>
+            <tr><th>Repository</th><th>Traces</th><th>Size</th><th>Latest</th></tr>
+        </thead>
+        <tbody>
+            {% for repo in repos %}
+            <tr>
+                <td><a href="/library?repo={{ repo.name }}">{{ repo.name }}</a></td>
+                <td>{{ repo.trace_count }}</td>
+                <td>{{ repo.total_size_mb }} MB</td>
+                <td>{{ repo.latest[:10] if repo.latest else '-' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="muted">No traces found. Capture one to get started.</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h3>Loaded Traces</h3>
+    {% if loaded_traces %}
+    <table class="table">
+        <thead><tr><th>Alias</th><th>Path</th><th>Actions</th></tr></thead>
+        <tbody>
+            {% for t in loaded_traces %}
+            <tr>
+                <td><strong>{{ t.alias }}</strong></td>
+                <td class="path">{{ t.path.split('/')[-1] }}</td>
+                <td>
+                    <a href="/analysis?alias={{ t.alias }}" class="btn btn-sm">Analyze</a>
+                    <button hx-delete="/api/traces/{{ t.alias }}" hx-target="closest tr" hx-swap="outerHTML" class="btn btn-sm btn-danger">Close</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="muted">No traces loaded. Load one from the library or capture a new one.</p>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Analysis{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h2>Analysis</h2>
+</div>
+
+{% if not loaded_traces %}
+<div class="card">
+    <p class="muted">No traces loaded. <a href="/library">Load one from the library</a> or <a href="/capture">capture a new trace</a>.</p>
+</div>
+{% else %}
+<div class="card">
+    <div class="toolbar">
+        <select id="trace-select" class="input-sm">
+            {% for t in loaded_traces %}
+            <option value="{{ t.alias }}">{{ t.alias }} ({{ t.path.split('/')[-1] }})</option>
+            {% endfor %}
+        </select>
+        <input type="text" id="package-input" placeholder="Package filter (optional)" class="input-md">
+    </div>
+
+    <div class="tool-grid">
+        <h4>Rendering</h4>
+        <button class="tool-btn" onclick="runTool('jank')">Jank</button>
+        <button class="tool-btn" onclick="runTool('input-latency')">Input Latency</button>
+        <button class="tool-btn" onclick="runTool('surfaceflinger')">SurfaceFlinger</button>
+
+        <h4>Startup</h4>
+        <button class="tool-btn" onclick="runTool('startup')">Startup</button>
+        <button class="tool-btn" onclick="runTool('startup-breakdown')">Breakdown</button>
+
+        <h4>Memory</h4>
+        <button class="tool-btn" onclick="runTool('memory')">Counters</button>
+        <button class="tool-btn" onclick="runTool('gc')">GC</button>
+        <button class="tool-btn" onclick="runTool('heap-java')">Java Heap</button>
+        <button class="tool-btn" onclick="runTool('heap-native')">Native Heap</button>
+        <button class="tool-btn" onclick="runTool('heap-dominators')">Dominators</button>
+        <button class="tool-btn" onclick="runTool('lmk')">LMK</button>
+        <button class="tool-btn" onclick="runTool('oom-priority')">OOM</button>
+
+        <h4>CPU & IPC</h4>
+        <button class="tool-btn" onclick="runTool('scheduling')">Scheduling</button>
+        <button class="tool-btn" onclick="runTool('binder')">Binder</button>
+        <button class="tool-btn" onclick="runTool('lock-contention')">Locks</button>
+
+        <h4>Stability</h4>
+        <button class="tool-btn" onclick="runTool('anr')">ANR</button>
+        <button class="tool-btn" onclick="runTool('blocking-calls')">Blocking</button>
+
+        <h4>Network</h4>
+        <button class="tool-btn" onclick="runTool('network')">Network</button>
+    </div>
+</div>
+
+<div class="card" id="analysis-results">
+    <p class="muted">Select a tool above to analyze the trace.</p>
+</div>
+{% endif %}
+{% endblock %}

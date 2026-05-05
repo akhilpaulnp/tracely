@@ -16,8 +16,12 @@ dependencies = [
 
 [project.scripts]
 tracely = "tracely.server:main"
+tracely-ui = "tracely.ui.app:main"
 
 [project.optional-dependencies]
+ui = [
+    "jinja2",
+]
 dev = [
     "pytest",
     "pytest-asyncio",
@@ -28,4 +32,4 @@ where = ["."]
 include = ["tracely*"]
 
 [tool.setuptools.package-data]
-tracely = ["resources/*.md"]
+tracely = ["resources/*.md", "ui/templates/**/*.html", "ui/static/**/*"]

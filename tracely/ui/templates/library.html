@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Library{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h2>Trace Library</h2>
+</div>
+
+<div class="grid-sidebar">
+    <div class="card">
+        <h3>Repositories</h3>
+        <ul class="repo-list">
+            {% for repo in repos %}
+            <li class="{% if repo.name == selected_repo %}active{% endif %}">
+                <a href="/library?repo={{ repo.name }}">
+                    <span class="repo-name">{{ repo.name }}</span>
+                    <span class="badge">{{ repo.trace_count }}</span>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <div class="card">
+        {% if selected_repo %}
+        <h3>Traces - {{ selected_repo }}</h3>
+        {% if traces %}
+        <table class="table">
+            <thead>
+                <tr><th>Time</th><th>Package</th><th>Size</th><th>Actions</th></tr>
+            </thead>
+            <tbody>
+                {% for t in traces %}
+                <tr>
+                    <td>{{ t.timestamp[11:19] if t.timestamp else '-' }}<br>
+                        <small class="muted">{{ t.timestamp[:10] if t.timestamp else '' }}</small></td>
+                    <td>{{ t.package or '-' }}</td>
+                    <td>{{ t.size_mb }} MB</td>
+                    <td>
+                        <button hx-post="/api/traces/load"
+                                hx-vals='{"path": "{{ t.path }}", "alias": "default"}'
+                                hx-target="#load-status"
+                                hx-swap="innerHTML"
+                                class="btn btn-sm btn-primary">Load</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="muted">No traces in this repo.</p>
+        {% endif %}
+        {% else %}
+        <p class="muted">Select a repository to browse traces.</p>
+        {% endif %}
+        <div id="load-status"></div>
+    </div>
+</div>
+{% endblock %}

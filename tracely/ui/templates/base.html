@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracely - {% block title %}Dashboard{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="/static/js/htmx.min.js" defer></script>
+</head>
+<body>
+    <div class="layout">
+        <nav class="sidebar">
+            <div class="logo">
+                <h1>Tracely</h1>
+                <span class="version">v0.3.0</span>
+            </div>
+            <ul class="nav-links">
+                <li><a href="/" class="{% if request.url.path == '/' %}active{% endif %}">Dashboard</a></li>
+                <li><a href="/library" class="{% if '/library' in request.url.path %}active{% endif %}">Library</a></li>
+                <li><a href="/capture" class="{% if '/capture' in request.url.path %}active{% endif %}">Capture</a></li>
+                <li><a href="/analysis" class="{% if '/analysis' in request.url.path %}active{% endif %}">Analysis</a></li>
+            </ul>
+            <div class="loaded-traces" id="loaded-traces"
+                 hx-get="/api/traces" hx-trigger="load, every 5s" hx-swap="innerHTML">
+            </div>
+        </nav>
+        <main class="content">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
