@@ -1,5 +1,6 @@
 package dev.tracely.core.traceprocessor
 
+import dev.tracely.core.model.QueryResult
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -7,75 +8,97 @@ import kotlin.test.assertTrue
 
 class TraceProcessorClientTest {
 
+    /**
+     * Test parseTableOutput via a mock process.
+     * We create a fake Process with known output to test parsing.
+     */
     @Test
-    fun `parseQueryResponse handles empty body`() {
-        val client = TraceProcessorClient(0)
-        val method = client::class.java.getDeclaredMethod("parseQueryResponse", String::class.java, Int::class.javaPrimitiveType)
+    fun `parseTableOutput handles single-column output`() {
+        val method = TraceProcessorClient::class.java.getDeclaredMethod(
+            "parseTableOutput", List::class.java, Int::class.javaPrimitiveType
+        )
         method.isAccessible = true
 
-        val result = method.invoke(client, "", 100) as dev.tracely.core.model.QueryResult
-        assertNotNull(result.error)
-        assertTrue(result.error!!.contains("Empty"))
+        // Simulate trace_processor_shell output
+        val lines = listOf(
+            "cnt",
+            "--------------------",
+            "81591",
+        )
+
+        // Need a dummy client instance
+        val dummyProcess = ProcessBuilder("echo").start()
+        val client = TraceProcessorClient(dummyProcess)
+        val result = method.invoke(client, lines, 100) as QueryResult
+
+        assertEquals(listOf("cnt"), result.columns)
+        assertEquals(1, result.rowCount)
+        assertEquals("81591", result.rows[0]["cnt"])
         client.close()
     }
 
     @Test
-    fun `parseQueryResponse parses pipe-separated format`() {
-        val client = TraceProcessorClient(0)
-        val method = client::class.java.getDeclaredMethod("parseQueryResponse", String::class.java, Int::class.javaPrimitiveType)
+    fun `parseTableOutput handles multi-column output`() {
+        val method = TraceProcessorClient::class.java.getDeclaredMethod(
+            "parseTableOutput", List::class.java, Int::class.javaPrimitiveType
+        )
         method.isAccessible = true
 
-        val body = """
-            "name"|"value"
-            "foo"|"123"
-            "bar"|"456"
-        """.trimIndent()
+        val lines = listOf(
+            "pid                   name",
+            "--------------------  --------------------",
+            "7855                  com.example.app",
+            "5235                  surfaceflinger",
+        )
 
-        val result = method.invoke(client, body, 100) as dev.tracely.core.model.QueryResult
-        assertEquals(listOf("name", "value"), result.columns)
+        val dummyProcess = ProcessBuilder("echo").start()
+        val client = TraceProcessorClient(dummyProcess)
+        val result = method.invoke(client, lines, 100) as QueryResult
+
+        assertEquals(listOf("pid", "name"), result.columns)
         assertEquals(2, result.rowCount)
-        assertEquals("foo", result.rows[0]["name"])
-        assertEquals("123", result.rows[0]["value"])
-        assertEquals("bar", result.rows[1]["name"])
+        assertEquals("7855", result.rows[0]["pid"])
+        assertEquals("com.example.app", result.rows[0]["name"])
         client.close()
     }
 
     @Test
-    fun `parseQueryResponse respects maxRows`() {
-        val client = TraceProcessorClient(0)
-        val method = client::class.java.getDeclaredMethod("parseQueryResponse", String::class.java, Int::class.javaPrimitiveType)
+    fun `parseTableOutput respects maxRows`() {
+        val method = TraceProcessorClient::class.java.getDeclaredMethod(
+            "parseTableOutput", List::class.java, Int::class.javaPrimitiveType
+        )
         method.isAccessible = true
 
-        val body = """
-            "col"
-            "a"
-            "b"
-            "c"
-            "d"
-        """.trimIndent()
+        val lines = listOf(
+            "col",
+            "----",
+            "a",
+            "b",
+            "c",
+            "d",
+        )
 
-        val result = method.invoke(client, body, 2) as dev.tracely.core.model.QueryResult
+        val dummyProcess = ProcessBuilder("echo").start()
+        val client = TraceProcessorClient(dummyProcess)
+        val result = method.invoke(client, lines, 2) as QueryResult
+
         assertEquals(2, result.rowCount)
         assertTrue(result.truncated)
         client.close()
     }
 
     @Test
-    fun `parseQueryResponse handles mismatched columns`() {
-        val client = TraceProcessorClient(0)
-        val method = client::class.java.getDeclaredMethod("parseQueryResponse", String::class.java, Int::class.javaPrimitiveType)
+    fun `parseTableOutput handles empty input`() {
+        val method = TraceProcessorClient::class.java.getDeclaredMethod(
+            "parseTableOutput", List::class.java, Int::class.javaPrimitiveType
+        )
         method.isAccessible = true
 
-        val body = """
-            "a"|"b"
-            "1"|"2"|"extra"
-            "3"|"4"
-        """.trimIndent()
+        val dummyProcess = ProcessBuilder("echo").start()
+        val client = TraceProcessorClient(dummyProcess)
+        val result = method.invoke(client, emptyList<String>(), 100) as QueryResult
 
-        val result = method.invoke(client, body, 100) as dev.tracely.core.model.QueryResult
-        // Row with extra column is skipped (size mismatch)
-        assertEquals(1, result.rowCount)
-        assertEquals("3", result.rows[0]["a"])
+        assertEquals(0, result.rowCount)
         client.close()
     }
 }

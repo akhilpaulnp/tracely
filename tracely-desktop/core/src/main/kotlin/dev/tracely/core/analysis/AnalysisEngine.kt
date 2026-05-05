@@ -22,7 +22,7 @@ class AnalysisEngine(private val tpManager: TraceProcessorManager) {
     /**
      * Run a tool by name against a loaded trace.
      */
-    suspend fun run(toolName: String, alias: String = "default", packageName: String = ""): QueryResult {
+    fun run(toolName: String, alias: String = "default", packageName: String = ""): QueryResult {
         val tool = tools[toolName]
             ?: return QueryResult(error = "Unknown tool: $toolName")
 

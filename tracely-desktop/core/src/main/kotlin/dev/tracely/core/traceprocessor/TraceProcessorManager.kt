@@ -4,7 +4,6 @@ import dev.tracely.core.model.LoadedTrace
 import dev.tracely.core.model.QueryResult
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.net.ServerSocket
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -33,31 +32,30 @@ class TraceProcessorManager {
             // Close existing trace with same alias
             closeTrace(alias)
 
-            val port = findFreePort()
             val binary = TraceProcessorBinary.getBinaryPath()
 
-            val process = ProcessBuilder(
-                binary, "--httpd", "--http-port", port.toString(), path
-            ).redirectErrorStream(true).start()
+            // Launch in interactive mode (stdin/stdout for queries)
+            val process = ProcessBuilder(binary, path)
+                .redirectErrorStream(true)
+                .start()
 
             try {
-                val client = TraceProcessorClient(port)
+                val client = TraceProcessorClient(process)
                 client.waitForReady()
-                instances[alias] = TraceProcessorInstance(process, client, port, path)
+                instances[alias] = TraceProcessorInstance(process, client, 0, path)
             } catch (e: Exception) {
-                // Clean up leaked process if waitForReady fails
                 process.destroyForcibly()
                 throw e
             }
 
-            return LoadedTrace(alias = alias, path = path, port = port)
+            return LoadedTrace(alias = alias, path = path, port = 0)
         }
     }
 
     /**
      * Execute SQL on a loaded trace.
      */
-    suspend fun query(alias: String, sql: String): QueryResult {
+    fun query(alias: String, sql: String): QueryResult {
         val instance = instances[alias]
             ?: return QueryResult(error = "No trace loaded with alias '$alias'. Use load-trace first.")
         return instance.client.query(sql)
@@ -97,7 +95,4 @@ class TraceProcessorManager {
         instances.keys.toList().forEach { closeTrace(it) }
     }
 
-    private fun findFreePort(): Int {
-        ServerSocket(0).use { return it.localPort }
-    }
 }

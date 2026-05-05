@@ -1,75 +1,121 @@
 package dev.tracely.core.traceprocessor
 
 import dev.tracely.core.model.QueryResult
-import io.ktor.client.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
-import io.ktor.http.*
-import kotlinx.coroutines.delay
-import kotlinx.serialization.json.*
-import java.io.File
 
 /**
- * HTTP client for a trace_processor_shell instance.
- * Each loaded trace gets its own trace_processor_shell subprocess.
+ * Client for a trace_processor_shell instance.
+ * Uses the process's interactive stdin/stdout for queries.
  */
-class TraceProcessorClient(private val port: Int) {
-
-    private val client = HttpClient(CIO)
-    private val baseUrl = "http://127.0.0.1:$port"
+class TraceProcessorClient(
+    private val process: Process,
+) {
+    private val stdin = process.outputStream.bufferedWriter()
+    private val stdout = process.inputStream.bufferedReader()
 
     /**
-     * Wait for the trace processor to be ready.
+     * Wait for the trace processor to finish loading the trace.
+     * Reads stdout until we see the loading complete message.
      */
-    suspend fun waitForReady(timeoutMs: Long = 10_000) {
+    fun waitForReady(timeoutMs: Long = 30_000) {
         val start = System.currentTimeMillis()
+        val buffer = StringBuilder()
+
+        // Read until we see the prompt or loading complete indicator
         while (System.currentTimeMillis() - start < timeoutMs) {
-            try {
-                val response = client.get("$baseUrl/status")
-                if (response.status == HttpStatusCode.OK) return
-            } catch (_: Exception) {
-                // Not ready yet
+            if (stdout.ready()) {
+                val char = stdout.read()
+                if (char == -1) break
+                buffer.append(char.toChar())
+                // trace_processor_shell prints "> " prompt when ready in interactive mode
+                // or prints "Trace loaded" in stderr (redirected)
+                val text = buffer.toString()
+                if (text.contains("Trace loaded") || text.endsWith("> ")) {
+                    return
+                }
+            } else {
+                Thread.sleep(100)
             }
-            delay(200)
         }
-        throw RuntimeException("trace_processor_shell did not start within ${timeoutMs}ms")
+        // If we get here without seeing the prompt, check if process is still alive
+        if (process.isAlive) return // Assume ready
+        throw RuntimeException("trace_processor_shell exited unexpectedly")
     }
 
     /**
      * Execute a SQL query and return parsed results.
+     * Sends SQL via stdin, reads CSV-formatted output from stdout.
      */
-    suspend fun query(sql: String, maxRows: Int = 5000): QueryResult {
+    fun query(sql: String, maxRows: Int = 5000): QueryResult {
         return try {
-            val response = client.post("$baseUrl/query") {
-                contentType(ContentType.Text.Plain)
-                setBody(sql)
+            // Send the query
+            stdin.write(sql.trimEnd().removeSuffix(";") + ";\n")
+            stdin.flush()
+
+            // Read response lines until we see the timing line or prompt
+            val lines = mutableListOf<String>()
+            var foundResults = false
+
+            while (true) {
+                val line = stdout.readLine() ?: break
+
+                // Skip empty lines and separator lines
+                if (line.isBlank()) continue
+                if (line.matches(Regex("^-+\\s*$"))) continue  // "----" separator
+                if (line.startsWith("Query executed in")) break  // End marker
+                if (line.trim() == ">") break  // Prompt
+
+                // Skip lines that are just the separator between header and data
+                if (line.all { it == '-' || it == ' ' }) continue
+
+                lines.add(line)
             }
 
-            val body = response.bodyAsText()
-            parseQueryResponse(body, maxRows)
+            if (lines.isEmpty()) {
+                return QueryResult(columns = emptyList(), rows = emptyList(), rowCount = 0)
+            }
+
+            parseTableOutput(lines, maxRows)
         } catch (e: Exception) {
             QueryResult(error = "Query failed: ${e.message}")
         }
     }
 
     /**
-     * Parse the raw query response into a QueryResult.
-     * trace_processor_shell returns a custom text format.
+     * Parse trace_processor_shell's column-aligned table output.
+     * Format:
+     *   col1                 col2
+     *   -------------------- ----------
+     *   value1               value2
      */
-    private fun parseQueryResponse(body: String, maxRows: Int): QueryResult {
-        val lines = body.lines().filter { it.isNotBlank() }
-        if (lines.isEmpty()) return QueryResult(error = "Empty response")
+    private fun parseTableOutput(lines: List<String>, maxRows: Int): QueryResult {
+        if (lines.isEmpty()) return QueryResult()
 
-        // First line is column headers separated by |
-        val columns = lines.first().split("|").map { it.trim().trim('"') }
+        // First line is headers (space-separated, right-padded)
+        val headerLine = lines[0]
+        val columns = headerLine.trim().split(Regex("\\s{2,}")).map { it.trim() }
+
+        if (columns.isEmpty()) return QueryResult(error = "Could not parse columns from: $headerLine")
+
+        // Find column positions from the separator line (if present)
+        val dataLines = if (lines.size > 1 && lines[1].contains("---")) {
+            lines.drop(2)  // Skip header + separator
+        } else {
+            lines.drop(1)  // Skip header only
+        }
+
         val rows = mutableListOf<Map<String, String>>()
-
-        for (line in lines.drop(1)) {
+        for (line in dataLines) {
             if (rows.size >= maxRows) break
-            val values = line.split("|").map { it.trim().trim('"') }
+            if (line.isBlank()) continue
+
+            // Split by 2+ spaces (column-aligned format)
+            val values = line.trim().split(Regex("\\s{2,}")).map { it.trim() }
+
             if (values.size == columns.size) {
                 rows.add(columns.zip(values).toMap())
+            } else if (values.size == 1 && columns.size == 1) {
+                // Single column, single value
+                rows.add(mapOf(columns[0] to values[0]))
             }
         }
 
@@ -77,11 +123,16 @@ class TraceProcessorClient(private val port: Int) {
             columns = columns,
             rows = rows,
             rowCount = rows.size,
-            truncated = lines.size - 1 > maxRows,
+            truncated = dataLines.size > maxRows,
         )
     }
 
     fun close() {
-        client.close()
+        try {
+            stdin.write(".quit\n")
+            stdin.flush()
+            stdin.close()
+        } catch (_: Exception) {}
+        process.destroyForcibly()
     }
 }
