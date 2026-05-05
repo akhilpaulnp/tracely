@@ -1,138 +1,156 @@
 package dev.tracely.core.traceprocessor
 
 import dev.tracely.core.model.QueryResult
+import java.net.HttpURLConnection
+import java.net.URI
 
 /**
- * Client for a trace_processor_shell instance.
- * Uses the process's interactive stdin/stdout for queries.
+ * HTTP+Protobuf client for trace_processor_shell --httpd.
+ * Speaks the official Perfetto RPC protocol.
  */
-class TraceProcessorClient(
-    private val process: Process,
-) {
-    private val stdin = process.outputStream.bufferedWriter()
-    private val stdout = process.inputStream.bufferedReader()
+class TraceProcessorClient(private val port: Int) {
 
-    /**
-     * Wait for the trace processor to finish loading the trace.
-     * Reads stdout until we see the loading complete message.
-     */
+    private val baseUrl = "http://127.0.0.1:$port"
+
     fun waitForReady(timeoutMs: Long = 30_000) {
         val start = System.currentTimeMillis()
-        val buffer = StringBuilder()
-
-        // Read until we see the prompt or loading complete indicator
         while (System.currentTimeMillis() - start < timeoutMs) {
-            if (stdout.ready()) {
-                val char = stdout.read()
-                if (char == -1) break
-                buffer.append(char.toChar())
-                // trace_processor_shell prints "> " prompt when ready in interactive mode
-                // or prints "Trace loaded" in stderr (redirected)
-                val text = buffer.toString()
-                if (text.contains("Trace loaded") || text.endsWith("> ")) {
+            try {
+                val conn = URI("$baseUrl/status").toURL().openConnection() as HttpURLConnection
+                conn.connectTimeout = 1000
+                conn.readTimeout = 1000
+                if (conn.responseCode == 200) {
+                    conn.inputStream.close()
                     return
                 }
-            } else {
-                Thread.sleep(100)
+            } catch (_: Exception) {
+                // Not ready yet
             }
+            Thread.sleep(200)
         }
-        // If we get here without seeing the prompt, check if process is still alive
-        if (process.isAlive) return // Assume ready
-        throw RuntimeException("trace_processor_shell exited unexpectedly")
+        throw RuntimeException("trace_processor_shell did not start within ${timeoutMs}ms")
     }
 
-    /**
-     * Execute a SQL query and return parsed results.
-     * Sends SQL via stdin, reads CSV-formatted output from stdout.
-     */
     fun query(sql: String, maxRows: Int = 5000): QueryResult {
         return try {
-            // Send the query
-            stdin.write(sql.trimEnd().removeSuffix(";") + ";\n")
-            stdin.flush()
+            val writer = ProtoWriter()
+            writer.writeString(1, sql)
+            val requestBytes = writer.toByteArray()
 
-            // Read response lines until we see the timing line or prompt
-            val lines = mutableListOf<String>()
-            var foundResults = false
+            val conn = URI("$baseUrl/query").toURL().openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/x-protobuf")
+            conn.outputStream.use { it.write(requestBytes) }
 
-            while (true) {
-                val line = stdout.readLine() ?: break
-
-                // Skip empty lines and separator lines
-                if (line.isBlank()) continue
-                if (line.matches(Regex("^-+\\s*$"))) continue  // "----" separator
-                if (line.startsWith("Query executed in")) break  // End marker
-                if (line.trim() == ">") break  // Prompt
-
-                // Skip lines that are just the separator between header and data
-                if (line.all { it == '-' || it == ' ' }) continue
-
-                lines.add(line)
+            if (conn.responseCode != 200) {
+                return QueryResult(error = "HTTP ${conn.responseCode}: ${conn.responseMessage}")
             }
 
-            if (lines.isEmpty()) {
-                return QueryResult(columns = emptyList(), rows = emptyList(), rowCount = 0)
-            }
-
-            parseTableOutput(lines, maxRows)
+            val responseBytes = conn.inputStream.use { it.readBytes() }
+            parseQueryResult(responseBytes, maxRows)
         } catch (e: Exception) {
             QueryResult(error = "Query failed: ${e.message}")
         }
     }
 
     /**
-     * Parse trace_processor_shell's column-aligned table output.
-     * Format:
-     *   col1                 col2
-     *   -------------------- ----------
-     *   value1               value2
+     * Parse a QueryResult protobuf response.
+     * Schema:
+     *   message QueryResult {
+     *     repeated string column_names = 1;
+     *     optional string error = 2;
+     *     repeated CellsBatch batch = 3;
+     *   }
+     *   message CellsBatch {
+     *     repeated CellType cells = 1 [packed];  // 1=null, 2=varint, 3=float, 4=blob, 5=string
+     *     repeated int64 varint_cells = 2 [packed];
+     *     repeated double float64_cells = 3 [packed];
+     *     repeated bytes blob_cells = 4;
+     *     optional string string_cells = 5;  // NUL-separated cells
+     *     optional bool is_last_batch = 6;
+     *   }
      */
-    private fun parseTableOutput(lines: List<String>, maxRows: Int): QueryResult {
-        if (lines.isEmpty()) return QueryResult()
+    internal fun parseQueryResult(bytes: ByteArray, maxRows: Int): QueryResult {
+        val reader = ProtoReader(bytes)
+        val columnNames = mutableListOf<String>()
+        var error: String? = null
+        val rows = mutableListOf<Map<String, String>>()
 
-        // First line is headers (space-separated, right-padded)
-        val headerLine = lines[0]
-        val columns = headerLine.trim().split(Regex("\\s{2,}")).map { it.trim() }
+        val pendingCells = ArrayDeque<Long>()
+        val pendingVarints = ArrayDeque<Long>()
+        val pendingFloats = ArrayDeque<Double>()
+        val pendingStrings = ArrayDeque<String>()
+        val pendingBlobs = ArrayDeque<ByteArray>()
 
-        if (columns.isEmpty()) return QueryResult(error = "Could not parse columns from: $headerLine")
-
-        // Find column positions from the separator line (if present)
-        val dataLines = if (lines.size > 1 && lines[1].contains("---")) {
-            lines.drop(2)  // Skip header + separator
-        } else {
-            lines.drop(1)  // Skip header only
+        fun consumeRow(): Map<String, String>? {
+            if (pendingCells.size < columnNames.size) return null
+            val row = mutableMapOf<String, String>()
+            for (col in columnNames) {
+                val cellType = pendingCells.removeFirst().toInt()
+                row[col] = when (cellType) {
+                    1 -> "" // NULL
+                    2 -> pendingVarints.removeFirstOrNull()?.toString() ?: ""
+                    3 -> {
+                        val d = pendingFloats.removeFirstOrNull() ?: 0.0
+                        if (d == d.toLong().toDouble()) d.toLong().toString() else d.toString()
+                    }
+                    4 -> pendingStrings.removeFirstOrNull() ?: ""
+                    5 -> pendingBlobs.removeFirstOrNull()?.toString(Charsets.UTF_8) ?: ""
+                    else -> ""
+                }
+            }
+            return row
         }
 
-        val rows = mutableListOf<Map<String, String>>()
-        for (line in dataLines) {
-            if (rows.size >= maxRows) break
-            if (line.isBlank()) continue
+        while (reader.hasMore()) {
+            val (fieldNum, wireType) = reader.readTag()
+            when (fieldNum) {
+                1 -> columnNames.add(reader.readString())
+                2 -> error = reader.readString()
+                3 -> {
+                    val batch = reader.readMessage()
+                    while (batch.hasMore()) {
+                        val (bfn, bwt) = batch.readTag()
+                        when (bfn) {
+                            1 -> pendingCells.addAll(batch.readPackedVarints())
+                            2 -> pendingVarints.addAll(batch.readPackedVarints())
+                            3 -> pendingFloats.addAll(batch.readPackedDoubles())
+                            4 -> pendingBlobs.add(batch.readBytes())
+                            5 -> {
+                                // NUL-separated strings (cell5: 0x00 byte)
+                                val concat = batch.readString()
+                                if (concat.isNotEmpty()) {
+                                    val parts = concat.split(Char(0))
+                                    val toAdd = if (parts.last().isEmpty()) parts.dropLast(1) else parts
+                                    pendingStrings.addAll(toAdd)
+                                }
+                            }
+                            6 -> batch.readVarint() // is_last_batch
+                            else -> batch.skipField(bwt)
+                        }
+                    }
 
-            // Split by 2+ spaces (column-aligned format)
-            val values = line.trim().split(Regex("\\s{2,}")).map { it.trim() }
-
-            if (values.size == columns.size) {
-                rows.add(columns.zip(values).toMap())
-            } else if (values.size == 1 && columns.size == 1) {
-                // Single column, single value
-                rows.add(mapOf(columns[0] to values[0]))
+                    // Drain complete rows
+                    while (pendingCells.size >= columnNames.size && rows.size < maxRows) {
+                        val row = consumeRow() ?: break
+                        rows.add(row)
+                    }
+                }
+                else -> reader.skipField(wireType)
             }
         }
 
         return QueryResult(
-            columns = columns,
+            columns = columnNames,
             rows = rows,
             rowCount = rows.size,
-            truncated = dataLines.size > maxRows,
+            truncated = pendingCells.size >= columnNames.size,
+            error = error,
         )
     }
 
     fun close() {
-        try {
-            stdin.write(".quit\n")
-            stdin.flush()
-            stdin.close()
-        } catch (_: Exception) {}
-        process.destroyForcibly()
+        // Nothing to close
     }
 }
