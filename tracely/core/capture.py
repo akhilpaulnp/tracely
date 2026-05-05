@@ -440,25 +440,35 @@ def capture_trace(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        start_new_session=True,
     )
-    proc.stdin.write(config)
-    proc.stdin.close()
 
-    # Launch app after a short delay for perfetto to start collecting
+    # Write config via communicate() if no app launch needed,
+    # otherwise write+close stdin manually so we can launch mid-trace
     if launch_app and package:
+        try:
+            proc.stdin.write(config)
+            proc.stdin.close()
+        except OSError:
+            proc.kill()
+            return {"error": "Failed to write config to perfetto (pipe closed)"}
         time.sleep(2)
         subprocess.run(
             cmd_prefix + ["shell", "monkey", "-p", package, "-c",
                          "android.intent.category.LAUNCHER", "1"],
             capture_output=True, timeout=10,
         )
-
-    # Wait for perfetto to finish (it runs for duration_ms then exits)
-    try:
-        _, stderr = proc.communicate(timeout=duration_s + 30)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        return {"error": "Perfetto capture timed out"}
+        try:
+            _, stderr = proc.communicate(timeout=duration_s + 30)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            return {"error": "Perfetto capture timed out"}
+    else:
+        try:
+            _, stderr = proc.communicate(input=config, timeout=duration_s + 30)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            return {"error": "Perfetto capture timed out"}
 
     if proc.returncode != 0:
         return {"error": f"Perfetto failed: {stderr}"}
@@ -508,12 +518,11 @@ def capture_memory_trace(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        start_new_session=True,
     )
-    proc.stdin.write(config)
-    proc.stdin.close()
 
     try:
-        _, stderr = proc.communicate(timeout=duration_s + 30)
+        _, stderr = proc.communicate(input=config, timeout=duration_s + 30)
     except subprocess.TimeoutExpired:
         proc.kill()
         return {"error": "Memory trace capture timed out"}
@@ -589,9 +598,15 @@ max_file_size_bytes: {max_file_size_mb * 1024 * 1024}
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        start_new_session=True,
     )
-    proc.stdin.write(config)
-    proc.stdin.close()
+
+    try:
+        proc.stdin.write(config)
+        proc.stdin.close()
+    except OSError as e:
+        proc.kill()
+        return {"error": f"Failed to write config to perfetto: {e}"}
 
     _live_trace_proc = proc
     _live_trace_serial = serial
