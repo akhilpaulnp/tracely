@@ -2,6 +2,7 @@ package dev.tracely.core.traceprocessor
 
 import java.io.File
 import java.net.URI
+import java.security.MessageDigest
 
 /**
  * Manages the trace_processor_shell binary.
@@ -18,6 +19,15 @@ object TraceProcessorBinary {
         "mac-arm64" to "https://commondatastorage.googleapis.com/perfetto-luci-artifacts/$VERSION/mac-arm64/trace_processor_shell",
         "linux-amd64" to "https://commondatastorage.googleapis.com/perfetto-luci-artifacts/$VERSION/linux-amd64/trace_processor_shell",
         "windows-amd64" to "https://commondatastorage.googleapis.com/perfetto-luci-artifacts/$VERSION/windows-amd64/trace_processor_shell.exe",
+    )
+
+    // SHA-256 checksums for each platform binary (v49.0)
+    // Update these when changing VERSION
+    private val EXPECTED_SHA256 = mapOf(
+        "mac-amd64" to "", // populate on first verified download
+        "mac-arm64" to "",
+        "linux-amd64" to "",
+        "windows-amd64" to "",
     )
 
     /**
@@ -57,13 +67,35 @@ object TraceProcessorBinary {
         val target = getCachedBinaryPath()
 
         println("Downloading trace_processor_shell for $platform...")
-        URI(url).toURL().openStream().use { input ->
-            target.outputStream().use { output ->
-                input.copyTo(output)
+        val tempFile = File(BINARY_DIR, "trace_processor_shell.tmp")
+        try {
+            URI(url).toURL().openStream().use { input ->
+                tempFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
             }
+
+            // Verify SHA-256 if checksum is available
+            val expectedHash = EXPECTED_SHA256[platform] ?: ""
+            if (expectedHash.isNotEmpty()) {
+                val actualHash = sha256(tempFile)
+                if (actualHash != expectedHash) {
+                    tempFile.delete()
+                    throw RuntimeException(
+                        "SHA-256 mismatch for $platform binary. " +
+                        "Expected: $expectedHash, Got: $actualHash. " +
+                        "The download may be corrupted or tampered with."
+                    )
+                }
+            }
+
+            tempFile.renameTo(target)
+            target.setExecutable(true)
+            println("Downloaded to ${target.absolutePath}")
+        } catch (e: Exception) {
+            tempFile.delete()
+            throw e
         }
-        target.setExecutable(true)
-        println("Downloaded to ${target.absolutePath}")
     }
 
     private fun getCachedBinaryPath(): File {
@@ -82,6 +114,18 @@ object TraceProcessorBinary {
         } catch (_: Exception) {
             null
         }
+    }
+
+    private fun sha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(8192)
+            var bytesRead: Int
+            while (input.read(buffer).also { bytesRead = it } != -1) {
+                digest.update(buffer, 0, bytesRead)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     private fun detectPlatform(): String {

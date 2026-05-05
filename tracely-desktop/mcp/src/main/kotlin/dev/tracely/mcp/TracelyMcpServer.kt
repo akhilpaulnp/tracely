@@ -13,11 +13,11 @@ import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
-import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.*
 
 /**
  * MCP server exposing Tracely's analysis tools to Claude Code / Codex.
+ * Tool handlers are suspend functions - no runBlocking needed.
  */
 class TracelyMcpServer {
 
@@ -64,7 +64,7 @@ class TracelyMcpServer {
         ) { args ->
             val path = args.arguments?.get("path")?.jsonPrimitive?.content ?: ""
             val alias = args.arguments?.get("alias")?.jsonPrimitive?.content ?: "default"
-            val result = runBlocking { tpManager.loadTrace(path, alias) }
+            val result = tpManager.loadTrace(path, alias)
             textResult("Loaded trace '$alias' from $path (port: ${result.port})")
         }
 
@@ -94,7 +94,7 @@ class TracelyMcpServer {
         ) { args ->
             val sql = args.arguments?.get("sql")?.jsonPrimitive?.content ?: ""
             val alias = args.arguments?.get("alias")?.jsonPrimitive?.content ?: "default"
-            val result = runBlocking { tpManager.query(alias, sql) }
+            val result = tpManager.query(alias, sql)
             textResult(Json.encodeToString(result))
         }
     }
@@ -108,7 +108,7 @@ class TracelyMcpServer {
             ) { args ->
                 val pkg = args.arguments?.get("package")?.jsonPrimitive?.content ?: ""
                 val alias = args.arguments?.get("alias")?.jsonPrimitive?.content ?: "default"
-                val result = runBlocking { analysisEngine.run(name, alias, pkg) }
+                val result = analysisEngine.run(name, alias, pkg)
                 textResult(Json.encodeToString(result))
             }
         }
@@ -139,10 +139,10 @@ class TracelyMcpServer {
             val pkg = args.arguments?.get("package")?.jsonPrimitive?.content ?: ""
             val launchApp = args.arguments?.get("launch_app")?.jsonPrimitive?.booleanOrNull ?: false
 
-            val result = runBlocking { captureManager.captureTrace(durationS, pkg, launchApp) }
+            val result = captureManager.captureTrace(durationS, pkg, launchApp)
 
             if (result.state == CaptureState.DONE && result.resultPath != null) {
-                runBlocking { tpManager.loadTrace(result.resultPath!!, "default") }
+                tpManager.loadTrace(result.resultPath!!, "default")
                 textResult("Captured and loaded trace: ${result.resultPath}")
             } else {
                 textResult("Capture failed: ${result.error ?: "unknown error"}")

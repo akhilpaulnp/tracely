@@ -60,10 +60,18 @@ object TraceLibrary {
      * List trace files for a given repo name.
      */
     fun listTraces(repoName: String): List<TraceInfo> {
+        // Validate repoName to prevent directory traversal
+        if (repoName != "(no repo)" && (repoName.contains("..") || repoName.contains("/") || repoName.contains("\\"))) {
+            return emptyList()
+        }
+
         val dir = if (repoName == "(no repo)") {
             File(TRACELY_HOME, "traces")
         } else {
-            File(TRACELY_HOME, "$repoName/traces")
+            val resolved = File(TRACELY_HOME, "$repoName/traces")
+            // Verify resolved path is under TRACELY_HOME
+            if (!resolved.canonicalPath.startsWith(TRACELY_HOME.canonicalPath)) return emptyList()
+            resolved
         }
         return if (dir.isDirectory) listTraceFiles(dir) else emptyList()
     }

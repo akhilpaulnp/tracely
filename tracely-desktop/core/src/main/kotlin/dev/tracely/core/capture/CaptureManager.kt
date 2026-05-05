@@ -124,9 +124,13 @@ class CaptureManager {
         } catch (_: Exception) { "" }
     }
 
+    private val PACKAGE_NAME_REGEX = Regex("^[a-zA-Z0-9._]+$")
+
     private fun buildConfig(durationS: Int, packageName: String): String {
         val durationMs = durationS * 1000L
         val bufferSizeKb = 65536
+        // Sanitize package name: only allow valid Android package characters
+        val safePkg = if (packageName.isNotEmpty() && PACKAGE_NAME_REGEX.matches(packageName)) packageName else ""
 
         return buildString {
             appendLine("duration_ms: $durationMs")
@@ -134,8 +138,8 @@ class CaptureManager {
             appendLine("data_sources { config { name: \"linux.process_stats\" target_buffer: 0 process_stats_config { scan_all_processes_on_start: true proc_stats_poll_ms: 1000 } } }")
             appendLine("data_sources { config { name: \"linux.sys_stats\" target_buffer: 0 sys_stats_config { meminfo_period_ms: 1000 } } }")
             appendLine("data_sources { config { name: \"linux.ftrace\" target_buffer: 0 ftrace_config { ftrace_events: \"sched/sched_switch\" ftrace_events: \"sched/sched_wakeup\" ftrace_events: \"power/suspend_resume\" ftrace_events: \"mm_event/mm_event_record\" }")
-            if (packageName.isNotEmpty()) {
-                appendLine("    atrace_apps: \"$packageName\"")
+            if (safePkg.isNotEmpty()) {
+                appendLine("    atrace_apps: \"$safePkg\"")
             }
             val categories = listOf("am", "binder_driver", "dalvik", "gfx", "input", "memory", "sched", "view", "wm")
             categories.forEach { appendLine("    atrace_categories: \"$it\"") }

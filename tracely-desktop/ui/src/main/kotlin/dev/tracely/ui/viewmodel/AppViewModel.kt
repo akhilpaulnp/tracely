@@ -92,9 +92,15 @@ class AppViewModel(
     }
 
     fun closeTrace(alias: String) {
-        tpManager.closeTrace(alias)
-        loadedTraces.clear()
-        loadedTraces.addAll(tpManager.listTraces())
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                tpManager.closeTrace(alias)
+            }
+            withContext(Dispatchers.Main) {
+                loadedTraces.clear()
+                loadedTraces.addAll(tpManager.listTraces())
+            }
+        }
     }
 
     fun runAnalysis(toolName: String, alias: String = "default", packageName: String = "") {

@@ -51,8 +51,15 @@ class AnalysisEngine(private val tpManager: TraceProcessorManager) {
         val registry = mutableMapOf<String, Tool>()
 
         fun register(tool: Tool) { registry[tool.name] = tool }
-        fun pkgFilter(pkg: String, col: String = "process_name") =
-            if (pkg.isNotEmpty()) "AND $col LIKE '%${pkg.replace("'", "''")}%'" else ""
+        fun pkgFilter(pkg: String, col: String = "process_name"): String {
+            if (pkg.isEmpty()) return ""
+            // Sanitize: escape SQL wildcards and single quotes
+            val safe = pkg
+                .replace("'", "''")
+                .replace("%", "\\%")
+                .replace("_", "\\_")
+            return "AND $col LIKE '%$safe%' ESCAPE '\\'"
+        }
 
         register(Tool("jank", "Frame timeline jank analysis", "rendering",
             modules = listOf("android.frames.timeline")
