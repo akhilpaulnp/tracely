@@ -41,8 +41,8 @@ def list_devices() -> list[dict]:
         )
         devices = []
         for line in result.stdout.strip().split("\n")[1:]:
-            if "\tdevice" in line:
-                parts = line.split()
+            parts = line.split()
+            if len(parts) >= 2 and parts[1] == "device":
                 serial = parts[0]
                 info = {"serial": serial}
                 for part in parts[2:]:
