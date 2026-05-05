@@ -1,7 +1,11 @@
 {
   "mcpServers": {
     "tracely": {
-      "command": ".venv/bin/tracely"
+      "command": ".venv/bin/tracely",
+      "env": {
+        "ANDROID_HOME": "/Users/entri/Library/Android/sdk",
+        "PATH": "/Users/entri/Library/Android/sdk/platform-tools:/usr/local/bin:/usr/bin:/bin"
+      }
     }
   }
 }

@@ -4,6 +4,8 @@ import os
 import time
 from datetime import datetime
 
+from tracely.core.device import _find_adb
+
 TRACELY_HOME = os.path.join(os.path.expanduser("~"), ".tracely")
 DEVICE_TRACE_PATH = "/data/misc/perfetto-traces/mcp_trace.perfetto-trace"
 
@@ -130,7 +132,7 @@ def _generate_trace_path(package: str = "") -> str:
 
 def _adb_cmd(args: list, serial: str = "", timeout: int = 5) -> str:
     """Run an adb command and return stdout, or empty string on failure."""
-    cmd = ["adb"]
+    cmd = [_find_adb()]
     if serial:
         cmd += ["-s", serial]
     try:
@@ -419,7 +421,7 @@ def capture_trace(
     serial: str = "",
 ) -> dict:
     """Capture a trace from connected device. Returns dict with local path or error."""
-    cmd_prefix = ["adb"]
+    cmd_prefix = [_find_adb()]
     if serial:
         cmd_prefix += ["-s", serial]
 
@@ -490,7 +492,7 @@ def capture_memory_trace(
     if not package:
         return {"error": "Package name required for memory profiling"}
 
-    cmd_prefix = ["adb"]
+    cmd_prefix = [_find_adb()]
     if serial:
         cmd_prefix += ["-s", serial]
 
@@ -557,7 +559,7 @@ def live_trace_start(
     if _live_trace_proc is not None and _live_trace_proc.poll() is None:
         return {"error": "A live trace is already running. Stop it first."}
 
-    cmd_prefix = ["adb"]
+    cmd_prefix = [_find_adb()]
     if serial:
         cmd_prefix += ["-s", serial]
 
@@ -615,7 +617,7 @@ def live_trace_stop(serial: str = "") -> dict:
     if _live_trace_proc is None or _live_trace_proc.poll() is not None:
         return {"error": "No live trace running. Start one first."}
 
-    cmd_prefix = ["adb"]
+    cmd_prefix = [_find_adb()]
     s = serial or _live_trace_serial
     if s:
         cmd_prefix += ["-s", s]

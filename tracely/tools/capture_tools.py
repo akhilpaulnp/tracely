@@ -40,8 +40,9 @@ async def capture_trace(
     # Force-stop for clean cold start if requested
     if launch_app and package:
         import subprocess
+        from tracely.core.device import _find_adb
         subprocess.run(
-            ["adb", "shell", "am", "force-stop", package],
+            [_find_adb(), "shell", "am", "force-stop", package],
             capture_output=True, timeout=5,
         )
         await asyncio.sleep(1)
