@@ -2,7 +2,7 @@
 
 ## Overview
 
-This is a Python MCP server (33 tools) for Android performance trace analysis using Perfetto's TraceProcessor. It connects to Claude Code via `.mcp.json`.
+This is a Python MCP server (37 tools) for Android performance trace analysis using Perfetto's TraceProcessor. It connects to Claude Code via `.mcp.json`.
 
 ## Project Structure
 

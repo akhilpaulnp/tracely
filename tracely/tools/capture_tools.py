@@ -1,9 +1,27 @@
 """Device trace capture tools."""
 import json
 import asyncio
+import threading
 from tracely.server import mcp
 from tracely.tools.core_tools import trace_manager
 from tracely.core import device, capture
+
+# Background capture state
+_capture_task = None  # dict with keys: thread, result, status, type, duration_s, package
+
+
+def _run_capture_in_background(capture_fn, kwargs, task_info):
+    """Run a capture function in background thread, store result."""
+    try:
+        result = capture_fn(**kwargs)
+        task_info["result"] = result
+        if "error" in result:
+            task_info["status"] = "error"
+        else:
+            task_info["status"] = "done"
+    except Exception as e:
+        task_info["result"] = {"error": str(e)}
+        task_info["status"] = "error"
 
 
 @mcp.tool()
@@ -16,9 +34,8 @@ async def capture_trace(
 ) -> str:
     """Capture a Perfetto trace from a connected Android device.
 
-    Captures system-wide trace data with all data sources enabled:
-    CPU scheduling, frame timeline, memory, input, network, logcat,
-    OOM/LMK events, and more. Auto-loads the trace after capture.
+    Starts capture in background. For traces >5s, call capture-status
+    to check completion, then the trace is auto-loaded.
 
     Args:
         duration_s: Capture duration in seconds (default: 10)
@@ -27,6 +44,8 @@ async def capture_trace(
         launch_app: If true, force-stop and cold-launch the package
         alias: Alias for the loaded trace (default: "default")
     """
+    global _capture_task
+
     err = device.check_adb()
     if err:
         return json.dumps({"error": err})
@@ -36,6 +55,9 @@ async def capture_trace(
         return json.dumps({
             "error": "No Android device connected. Connect via USB and enable USB debugging."
         })
+
+    if _capture_task and _capture_task["status"] == "capturing":
+        return json.dumps({"error": "A capture is already in progress. Call capture-status to check."})
 
     # Force-stop for clean cold start if requested
     if launch_app and package:
@@ -47,31 +69,43 @@ async def capture_trace(
         )
         await asyncio.sleep(1)
 
-    result = await asyncio.to_thread(
-        capture.capture_trace,
-        duration_s=duration_s,
-        package=package,
-        buffer_size_kb=buffer_size_kb,
-        launch_app=launch_app,
-    )
+    task_info = {
+        "status": "capturing",
+        "result": None,
+        "type": "trace",
+        "duration_s": duration_s,
+        "package": package,
+        "alias": alias,
+    }
 
-    if "error" in result:
-        return json.dumps(result)
-
-    try:
-        trace_manager.load_trace(result["path"], alias)
-        return json.dumps({
-            "status": "captured_and_loaded",
-            "path": result["path"],
-            "alias": alias,
+    thread = threading.Thread(
+        target=_run_capture_in_background,
+        args=(capture.capture_trace, {
             "duration_s": duration_s,
-        })
-    except Exception as e:
-        return json.dumps({
-            "status": "captured_but_load_failed",
-            "path": result["path"],
-            "error": str(e),
-        })
+            "package": package,
+            "buffer_size_kb": buffer_size_kb,
+            "launch_app": launch_app,
+        }, task_info),
+        daemon=True,
+    )
+    task_info["thread"] = thread
+    _capture_task = task_info
+    thread.start()
+
+    # For short captures (<=5s), wait for completion inline
+    if duration_s <= 5:
+        thread.join(timeout=duration_s + 15)
+        if task_info["status"] == "done":
+            return _finalize_capture(task_info)
+        elif task_info["status"] == "error":
+            return json.dumps(task_info["result"])
+
+    return json.dumps({
+        "status": "capture_started",
+        "message": f"Trace capture started ({duration_s}s). Call capture-status to check completion.",
+        "duration_s": duration_s,
+        "package": package,
+    })
 
 
 @mcp.tool()
@@ -84,9 +118,10 @@ async def capture_memory_trace(
 ) -> str:
     """Capture a memory profiling trace with heap dump data.
 
-    Includes all standard data sources PLUS heapprofd (native heap)
-    and java_hprof (Java heap dumps). Use analyze-heap-native,
-    analyze-heap-java, and analyze-heap-dominators on the result.
+    Starts capture in background. Call capture-status to check completion.
+
+    Includes heapprofd (native heap) and java_hprof (Java heap dumps).
+    Use analyze-heap-native, analyze-heap-java, and analyze-heap-dominators.
 
     Requires: Android 10+ for native, Android 11+ for Java.
 
@@ -97,6 +132,8 @@ async def capture_memory_trace(
         java_heap: Enable Java heap dumps (default: true)
         alias: Alias for the loaded trace (default: "default")
     """
+    global _capture_task
+
     if not package:
         return json.dumps({"error": "Package name required for memory profiling"})
 
@@ -106,32 +143,103 @@ async def capture_memory_trace(
 
     devices = device.list_devices()
     if not devices:
+        return json.dumps({"error": "No Android device connected."})
+
+    if _capture_task and _capture_task["status"] == "capturing":
+        return json.dumps({"error": "A capture is already in progress. Call capture-status to check."})
+
+    task_info = {
+        "status": "capturing",
+        "result": None,
+        "type": "memory_trace",
+        "duration_s": duration_s,
+        "package": package,
+        "alias": alias,
+    }
+
+    thread = threading.Thread(
+        target=_run_capture_in_background,
+        args=(capture.capture_memory_trace, {
+            "duration_s": duration_s,
+            "package": package,
+            "java_heap": java_heap,
+            "native_heap": native_heap,
+        }, task_info),
+        daemon=True,
+    )
+    task_info["thread"] = thread
+    _capture_task = task_info
+    thread.start()
+
+    # For short captures (<=5s), wait inline
+    if duration_s <= 5:
+        thread.join(timeout=duration_s + 15)
+        if task_info["status"] == "done":
+            return _finalize_capture(task_info)
+        elif task_info["status"] == "error":
+            return json.dumps(task_info["result"])
+
+    return json.dumps({
+        "status": "capture_started",
+        "message": f"Memory trace capture started ({duration_s}s). Call capture-status to check completion.",
+        "duration_s": duration_s,
+        "package": package,
+    })
+
+
+@mcp.tool()
+def capture_status() -> str:
+    """Check the status of a running trace capture.
+
+    Returns the current capture state. If capture is done, auto-loads
+    the trace and returns the path. Call this after capture-trace or
+    capture-memory-trace when duration > 5s.
+    """
+    global _capture_task
+
+    if _capture_task is None:
+        return json.dumps({"status": "idle", "message": "No capture in progress."})
+
+    if _capture_task["status"] == "capturing":
         return json.dumps({
-            "error": "No Android device connected."
+            "status": "capturing",
+            "type": _capture_task["type"],
+            "duration_s": _capture_task["duration_s"],
+            "package": _capture_task.get("package", ""),
+            "message": f"Still capturing... (~{_capture_task['duration_s']}s total)",
         })
 
-    result = await asyncio.to_thread(
-        capture.capture_memory_trace,
-        duration_s=duration_s,
-        package=package,
-        java_heap=java_heap,
-        native_heap=native_heap,
-    )
+    if _capture_task["status"] == "done":
+        return _finalize_capture(_capture_task)
 
-    if "error" in result:
+    if _capture_task["status"] == "error":
+        result = _capture_task["result"]
+        _capture_task = None
         return json.dumps(result)
+
+    return json.dumps({"status": "unknown"})
+
+
+def _finalize_capture(task_info) -> str:
+    """Load a completed capture into trace manager and return result."""
+    global _capture_task
+    result = task_info["result"]
+    alias = task_info.get("alias", "default")
 
     try:
         trace_manager.load_trace(result["path"], alias)
-        return json.dumps({
+        _capture_task = None
+        response = {
             "status": "captured_and_loaded",
             "path": result["path"],
             "alias": alias,
-            "duration_s": duration_s,
-            "native_heap": native_heap,
-            "java_heap": java_heap,
-        })
+            "duration_s": task_info["duration_s"],
+        }
+        if task_info["type"] == "memory_trace":
+            response["type"] = "memory_trace"
+        return json.dumps(response)
     except Exception as e:
+        _capture_task = None
         return json.dumps({
             "status": "captured_but_load_failed",
             "path": result["path"],
