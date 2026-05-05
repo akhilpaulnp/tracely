@@ -1,8 +1,18 @@
-"""Analysis service - registry of tools callable from the UI."""
+"""Analysis service - registry of tools callable from the UI.
+
+The MCP tool functions use singletons from tracely.tools.core_tools.
+We patch those singletons to point to the UI's own instances so the
+same tool code works in both MCP and UI contexts.
+"""
 import json
+import tracely.tools.core_tools as core_tools
 from tracely.ui.app import trace_manager, query_engine
 
-# Import tool functions directly (they return JSON strings)
+# Patch the MCP tool module's singletons to use UI instances
+core_tools.trace_manager = trace_manager
+core_tools.query_engine = query_engine
+
+# Now import tool functions (they'll use our patched singletons)
 from tracely.tools.jank import analyze_jank
 from tracely.tools.startup import analyze_startup, startup_breakdown
 from tracely.tools.memory import analyze_memory
@@ -57,7 +67,6 @@ def run_tool(tool_name: str, alias: str = "default", package: str = "") -> dict 
         return None
 
     fn = entry[0]
-    # Call the tool function with appropriate args
     try:
         result_json = fn(package=package, alias=alias)
         return json.loads(result_json)

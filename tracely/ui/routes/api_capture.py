@@ -69,7 +69,8 @@ async def capture_status_stream(request: Request):
     """SSE endpoint for capture progress."""
     async def event_generator():
         while True:
-            await request.is_disconnected()
+            if await request.is_disconnected():
+                break
             yield {"event": "status", "data": json.dumps(_capture_state)}
             if _capture_state["status"] in ("done", "error", "idle"):
                 # If done, try to auto-load the trace

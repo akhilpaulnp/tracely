@@ -186,6 +186,36 @@ small.muted { font-size: 0.75rem; }
 #analysis-results { overflow-x: auto; }
 #analysis-results table { min-width: 600px; }
 
+/* Charts */
+.chart-container { margin: 1rem 0; padding: 0.5rem; background: var(--bg); border-radius: var(--radius); }
+.chart-container svg { display: block; }
+.chart-legend { display: flex; gap: 1rem; margin-top: 0.5rem; font-size: 0.8rem; }
+.legend-item { display: flex; align-items: center; gap: 0.3rem; color: var(--text-muted); }
+.legend-dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.compare-legend { display: flex; gap: 1.5rem; margin: 0.75rem 0; font-size: 0.85rem; }
+
+.results-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
+.results-header h3 { margin: 0; }
+
+/* Device card */
+.device-card { padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+.device-card:last-child { border-bottom: none; }
+.device-status { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 0.4rem; }
+.device-status.connected { background: var(--success); }
+.device-status.disconnected { background: var(--danger); }
+
+/* Loaded trace sidebar items */
+.loaded-trace-item { padding: 0.4rem 0; border-bottom: 1px solid var(--border); font-size: 0.8rem; }
+.loaded-trace-item:last-child { border-bottom: none; }
+
+/* Tabs */
+.tabs { display: flex; gap: 0; margin-bottom: 1rem; border-bottom: 1px solid var(--border); }
+.tab { padding: 0.6rem 1.2rem; cursor: pointer; color: var(--text-muted); border-bottom: 2px solid transparent; transition: all 0.15s; }
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
 @media (max-width: 900px) {
     .grid-2 { grid-template-columns: 1fr; }
     .grid-sidebar { grid-template-columns: 1fr; }
