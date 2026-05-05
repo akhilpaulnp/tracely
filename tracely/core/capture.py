@@ -432,46 +432,25 @@ def capture_trace(
         available_categories=caps.get("available_categories"),
     )
 
-    # Use Popen (non-blocking) so we can launch the app while tracing
-    # --txt flag needed for text-format configs on most Android devices
-    proc = subprocess.Popen(
-        cmd_prefix + ["shell", "perfetto", "--txt", "-c", "-", "-o", DEVICE_TRACE_PATH],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        start_new_session=True,
-    )
-
-    # Write config via communicate() if no app launch needed,
-    # otherwise write+close stdin manually so we can launch mid-trace
+    # Launch app before starting trace if requested
     if launch_app and package:
-        try:
-            proc.stdin.write(config)
-            proc.stdin.close()
-        except OSError:
-            proc.kill()
-            return {"error": "Failed to write config to perfetto (pipe closed)"}
-        time.sleep(2)
         subprocess.run(
             cmd_prefix + ["shell", "monkey", "-p", package, "-c",
                          "android.intent.category.LAUNCHER", "1"],
             capture_output=True, timeout=10,
         )
-        try:
-            _, stderr = proc.communicate(timeout=duration_s + 30)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            return {"error": "Perfetto capture timed out"}
-    else:
-        try:
-            _, stderr = proc.communicate(input=config, timeout=duration_s + 30)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            return {"error": "Perfetto capture timed out"}
+        time.sleep(2)
 
-    if proc.returncode != 0:
-        return {"error": f"Perfetto failed: {stderr}"}
+    # Use subprocess.run with input= to pipe config via stdin.
+    # This is atomic (no Popen + manual pipe management) and safe
+    # when called from background threads in MCP stdio servers.
+    result = subprocess.run(
+        cmd_prefix + ["shell", "perfetto", "--txt", "-c", "-", "-o", DEVICE_TRACE_PATH],
+        input=config, capture_output=True, text=True, timeout=duration_s + 30,
+    )
+
+    if result.returncode != 0:
+        return {"error": f"Perfetto failed: {result.stderr}"}
 
     local_path = _generate_trace_path(package)
     pull = subprocess.run(
@@ -512,23 +491,14 @@ def capture_memory_trace(
         api_level=caps["api_level"],
     )
 
-    proc = subprocess.Popen(
+    # Use subprocess.run with input= (atomic, no Popen pipe issues)
+    result = subprocess.run(
         cmd_prefix + ["shell", "perfetto", "--txt", "-c", "-", "-o", DEVICE_TRACE_PATH],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        start_new_session=True,
+        input=config, capture_output=True, text=True, timeout=duration_s + 30,
     )
 
-    try:
-        _, stderr = proc.communicate(input=config, timeout=duration_s + 30)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        return {"error": "Memory trace capture timed out"}
-
-    if proc.returncode != 0:
-        return {"error": f"Perfetto failed: {stderr}"}
+    if result.returncode != 0:
+        return {"error": f"Perfetto failed: {result.stderr}"}
 
     local_path = _generate_trace_path(package + "_memory")
     pull = subprocess.run(
@@ -592,6 +562,8 @@ flush_period_ms: 30000
 max_file_size_bytes: {max_file_size_mb * 1024 * 1024}
 """
 
+    # Live trace uses Popen since it runs indefinitely.
+    # It's called from asyncio.to_thread but completes quickly (just starts perfetto).
     proc = subprocess.Popen(
         cmd_prefix + ["shell", "perfetto", "--txt", "-c", "-", "-o", DEVICE_TRACE_PATH],
         stdin=subprocess.PIPE,
