@@ -61,16 +61,17 @@ class AnalysisEngine(private val tpManager: TraceProcessorManager) {
             return "AND $col LIKE '%$safe%' ESCAPE '\\'"
         }
 
-        register(Tool("jank", "Frame timeline jank analysis", "rendering",
-            modules = listOf("android.frames.timeline")
-        ) { pkg ->
-            """SELECT process_name, COUNT(*) as total_frames,
-                SUM(CASE WHEN jank_type != 0 THEN 1 ELSE 0 END) as janky_frames,
-                ROUND(AVG(dur) / 1e6, 2) as avg_frame_dur_ms,
-                ROUND(MAX(dur) / 1e6, 2) as max_frame_dur_ms
-            FROM android_frames_timeline
-            WHERE 1=1 ${pkgFilter(pkg)}
-            GROUP BY process_name ORDER BY janky_frames DESC LIMIT 20"""
+        register(Tool("jank", "Frame timeline jank analysis", "rendering") { pkg ->
+            """SELECT
+                p.name as process_name,
+                COUNT(*) as total_frames,
+                SUM(CASE WHEN aft.jank_type != 'None' AND aft.jank_type IS NOT NULL THEN 1 ELSE 0 END) as janky_frames,
+                ROUND(AVG(aft.dur) / 1e6, 2) as avg_frame_dur_ms,
+                ROUND(MAX(aft.dur) / 1e6, 2) as max_frame_dur_ms
+            FROM actual_frame_timeline_slice aft
+            JOIN process p ON aft.upid = p.upid
+            WHERE p.name IS NOT NULL ${pkgFilter(pkg, "p.name")}
+            GROUP BY p.name ORDER BY janky_frames DESC LIMIT 20"""
         })
 
         register(Tool("startup", "App startup timing", "startup",
@@ -113,10 +114,10 @@ class AnalysisEngine(private val tpManager: TraceProcessorManager) {
         })
 
         register(Tool("scheduling", "CPU scheduling per thread", "cpu") { pkg ->
+            // sched_slice rows are 'Running' intervals. thread_state has wait states (R, S, etc.)
             """SELECT t.name as thread_name, p.name as process_name,
-                ROUND(SUM(CASE WHEN s.state = 'Running' THEN s.dur ELSE 0 END) / 1e6, 2) as running_ms,
-                ROUND(SUM(CASE WHEN s.state = 'R' THEN s.dur ELSE 0 END) / 1e6, 2) as runnable_ms,
-                ROUND(SUM(CASE WHEN s.state = 'S' THEN s.dur ELSE 0 END) / 1e6, 2) as sleeping_ms
+                ROUND(SUM(s.dur) / 1e6, 2) as running_ms,
+                COUNT(*) as slices
             FROM sched_slice s
             JOIN thread t ON s.utid = t.utid
             JOIN process p ON t.upid = p.upid

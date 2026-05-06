@@ -21,7 +21,7 @@ fun main() {
     )
 
     runBlocking {
-        server.connect(transport)
+        server.createSession(transport)
         // Keep running until the transport closes
         (server as? Job)?.join() ?: run {
             // Block until stdin is closed
